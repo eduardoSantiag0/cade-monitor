@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Processos — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Processos monitorados</h2>
+      <p>{{ processes.count }} processo(s).</p>
+    </div>
+    <div class="actions">
+      <form method="get" style="display:flex;gap:8px;align-items:center">
+        <select name="status" onchange="this.form.submit()" style="min-width:140px">
+          <option value="">Todos os status</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if status_filter %}
+        <a href="{% url 'processes:list' %}" class="btn btn-light btn-sm">✕ Limpar</a>
+        {% endif %}
+      </form>
+      <a href="{% url 'processes:create' %}" class="btn">+ Cadastrar processo</a>
+    </div>
+  </div>
+  {% if processes %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Processo</th><th>Status</th><th>Intervalo</th>
+          <th>Última mudança</th><th>Última checagem</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for process in processes %}
+        <tr>
+          <td class="muted" style="font-size:12px">{{ process.pk }}</td>
+          <td>
+            <a href="{% url 'processes:detail' process.pk %}"
+               style="font-weight:600;text-decoration:none;color:inherit">{{ process.label }}</a>
+            <div class="muted url-wrap" style="font-size:11px;margin-top:3px">{{ process.source }}</div>
+          </td>
+          <td><span class="badge badge-{{ process.status }}">{{ process.get_status_display }}</span></td>
+          <td class="muted" style="font-size:12px">{{ process.check_interval_seconds }}s</td>
+          <td>
+            {% if process.last_changed_at %}
+              {{ process.last_changed_at|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="muted">&mdash;</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if process.last_checked_at %}
+              {{ process.last_checked_at|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="muted">Nunca</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="actions">
+              <a href="{% url 'processes:detail' process.pk %}" class="btn btn-light btn-sm">Ver</a>
+              <form method="post" action="{% url 'processes:check_now' process.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-light btn-sm">↻ Checar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum processo cadastrado. <a href="{% url 'processes:create' %}">Comece aqui</a>.</p>
+  {% endif %}
+</section>
+{% endblock %}

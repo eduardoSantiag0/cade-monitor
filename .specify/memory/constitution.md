@@ -69,7 +69,7 @@ O canal de notificação WhatsApp DEVE usar exclusivamente a Evolution API self-
 usar `django.core.mail` com backend SMTP configurável.
 
 - MUST: Implementar canais como classes em `notifications/channels/` com interface comum.
-- MUST NOT: Usar Twilio, Meta Cloud API, ou qualquer outro provedor de mensageria.
+- MUST NOT: Usar qualquer outro provedor de mensageria fora da Evolution API.
 - MUST NOT: Adicionar dependências de SDK proprietário para envio de mensagens.
 - SHOULD: Registrar cada tentativa de envio em `NotificationAttempt` para rastreabilidade.
 
@@ -120,7 +120,7 @@ Esta stack É o contrato de implementação. Desvios MUST ser aprovados via emen
 | Worker    | `run_worker` management command | Loop com sleep; sem Celery          |
 | WSGI      | Gunicorn 1 worker 2 threads     | Sem uvicorn/asgi em prod            |
 | Static    | WhiteNoise                      | Sem Nginx para static em dev        |
-| WhatsApp  | Evolution API (self-hosted)     | Sem Meta Cloud API                  |
+| WhatsApp  | Evolution API (self-hosted)     | Provider unico permitido            |
 | E-mail    | django.core.mail (SMTP)         | Sem SendGrid/Mailgun SDK            |
 | Container | Docker + Docker Compose         | Sem Kubernetes                      |
 

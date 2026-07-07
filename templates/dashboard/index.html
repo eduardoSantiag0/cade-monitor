@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CADE Monitor{% endblock %}
+{% block content %}
+<div class="stats">
+  <div class="stat">
+    <small>Total de processos</small>
+    <strong>{{ stats.total_processes }}</strong>
+  </div>
+  <div class="stat">
+    <small>Ativos</small>
+    <strong>{{ stats.active_processes }}</strong>
+  </div>
+  <div class="stat">
+    <small>Mudanças hoje</small>
+    <strong>{{ stats.changes_today }}</strong>
+  </div>
+  <div class="stat">
+    <small>Notificações pendentes</small>
+    <strong>{{ stats.pending_notifications }}</strong>
+  </div>
+</div>
+
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Processos monitorados</h2>
+      <p>Ordenados pelo mais recente com mudança detectada.</p>
+    </div>
+    <a href="{% url 'processes:create' %}" class="btn">+ Novo processo</a>
+  </div>
+  {% if processes %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Processo</th><th>Status</th><th>Última mudança</th>
+          <th>Última checagem</th><th>Assinantes</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for process in processes %}
+        <tr>
+          <td>
+            <a href="{% url 'processes:detail' process.pk %}"
+               style="font-weight:600;text-decoration:none;color:inherit">{{ process.label }}</a>
+            <div class="muted" style="font-size:11px;margin-top:2px">{{ process.source|truncatechars:60 }}</div>
+          </td>
+          <td><span class="badge badge-{{ process.status }}">{{ process.get_status_display }}</span></td>
+          <td>
+            {% if process.last_changed_at %}
+              {{ process.last_changed_at|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="muted">&mdash;</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if process.last_checked_at %}
+              {{ process.last_checked_at|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="muted">Nunca</span>
+            {% endif %}
+          </td>
+          <td>{{ process.subscriber_count }}</td>
+          <td><a href="{% url 'processes:detail' process.pk %}" class="btn btn-light btn-sm">Ver</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">
+    Nenhum processo cadastrado ainda.
+    <a href="{% url 'processes:create' %}">Cadastre o primeiro</a>.
+  </p>
+  {% endif %}
+</section>
+
+{% if recent_changes %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Mudanças recentes</h2>
+      <p>Últimas 10 mudanças detectadas em qualquer processo.</p>
+    </div>
+    <a href="{% url 'dashboard:notifications' %}" class="btn btn-light btn-sm">Ver notificações</a>
+  </div>
+  <ul class="timeline">
+    {% for change in recent_changes %}
+    <li>
+      <strong>
+        <a href="{% url 'processes:change_detail' change.pk %}"
+           style="text-decoration:none;color:inherit">{{ change.process.label }}</a>
+      </strong>
+      <span class="muted" style="font-size:12px;margin-left:6px">{{ change.detected_at|date:"d/m/Y H:i" }}</span>
+      {% if change.review %}
+        <span class="badge badge-{{ change.review }}" style="margin-left:6px">{{ change.get_review_display }}</span>
+      {% endif %}
+      <div style="font-size:13px;margin-top:4px">{{ change.summary|truncatechars:150 }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

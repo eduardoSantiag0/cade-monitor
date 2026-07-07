@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ process.label }} — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>{{ process.label }}</h2>
+      <p>
+        <span class="badge badge-{{ process.status }}">{{ process.get_status_display }}</span>
+        &nbsp;
+        <a href="{{ process.effective_url }}" target="_blank" rel="noopener"
+           class="muted" style="font-size:12px">{{ process.effective_url|truncatechars:80 }} ↗</a>
+      </p>
+    </div>
+    <div class="actions">
+      <form method="post" action="{% url 'processes:check_now' process.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-sm">↻ Checar agora</button>
+      </form>
+      <a href="{% url 'processes:edit' process.pk %}" class="btn btn-light btn-sm">Editar</a>
+      <form method="post" action="{% url 'processes:toggle' process.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-sm">
+          {% if process.status == 'active' %}⏸ Pausar{% else %}▶ Ativar{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <label>Fonte cadastrada</label>
+      <div class="url-wrap" style="font-size:13px">{{ process.source }}</div>
+      {% if process.resolved_url %}
+        <div class="muted" style="font-size:12px;margin-top:4px">
+          URL resolvida: {{ process.resolved_url|truncatechars:80 }}
+        </div>
+      {% endif %}
+    </div>
+    <div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label>Intervalo</label>
+          <div>{{ process.check_interval_seconds }}s</div>
+        </div>
+        <div>
+          <label>Assinantes</label>
+          <div>{{ subscriptions.count }}</div>
+        </div>
+        <div>
+          <label>Última checagem</label>
+          <div>
+            {% if process.last_checked_at %}
+              {{ process.last_checked_at|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="muted">Nunca</span>
+            {% endif %}
+          </div>
+        </div>
+        <div>
+          <label>Última mudança</label>
+          <div>
+            {% if process.last_changed_at %}
+              {{ process.last_changed_at|date:"d/m/Y H:i" }}
+            {% else %}
+              <span class="muted">&mdash;</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if process.last_error %}
+  <div class="flash error" style="margin-top:12px">
+    <strong>Último erro:</strong> {{ process.last_error }}
+  </div>
+  {% endif %}
+
+  {% if process.notes %}
+  <div style="margin-top:12px;padding:12px;background:#f8fafc;border-radius:6px;border:1px solid var(--line)">
+    <label>Observações internas</label>
+    <div style="font-size:13px;white-space:pre-wrap">{{ process.notes }}</div>
+  </div>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Assinantes ({{ subscriptions.count }})</h2>
+    <a href="{% url 'subscribers:list' %}" class="btn btn-light btn-sm">Gerenciar assinantes</a>
+  </div>
+  {% if subscriptions %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>E-mail</th><th>WA</th></tr>
+      </thead>
+      <tbody>
+        {% for sub in subscriptions %}
+        <tr>
+          <td>{{ sub.subscriber.name }}</td>
+          <td class="muted" style="font-size:12px">{{ sub.subscriber.email|default:"&mdash;" }}</td>
+          <td class="muted" style="font-size:12px">{{ sub.subscriber.phone|default:"&mdash;" }}</td>
+          <td>{% if sub.email_enabled %}✓{% else %}&mdash;{% endif %}</td>
+          <td>{% if sub.whatsapp_enabled %}✓{% else %}&mdash;{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum assinante vinculado a este processo.</p>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Histórico de mudanças</h2>
+      <p>{{ page_obj.paginator.count }} mudança(s) no total.</p>
+    </div>
+  </div>
+  {% if page_obj %}
+  <ul class="timeline">
+    {% for change in page_obj %}
+    <li>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <a href="{% url 'processes:change_detail' change.pk %}"
+           style="font-weight:600;text-decoration:none;color:inherit">{{ change.detected_at|date:"d/m/Y H:i" }}</a>
+        {% if change.review %}
+          <span class="badge badge-{{ change.review }}">{{ change.get_review_display }}</span>
+        {% endif %}
+      </div>
+      <div style="font-size:13px;margin-top:4px">{{ change.summary|truncatechars:200 }}</div>
+      <a href="{% url 'processes:change_detail' change.pk %}" class="btn btn-light btn-sm" style="margin-top:6px">Ver diff →</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if page_obj.has_other_pages %}
+  <div class="actions" style="margin-top:12px">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-light btn-sm">← Anterior</a>
+    {% endif %}
+    <span class="muted" style="font-size:13px">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="btn btn-light btn-sm">Próxima →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="muted">Nenhuma mudança detectada ainda.</p>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head"><h2>Execuções recentes</h2></div>
+  {% if recent_runs %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Status</th><th>Início</th><th>Fim</th><th>Erro</th></tr></thead>
+      <tbody>
+        {% for run in recent_runs %}
+        <tr>
+          <td class="muted" style="font-size:12px">{{ run.pk }}</td>
+          <td><span class="badge badge-{{ run.status }}">{{ run.get_status_display }}</span></td>
+          <td style="font-size:12px">{{ run.started_at|date:"d/m H:i:s" }}</td>
+          <td style="font-size:12px">
+            {% if run.finished_at %}{{ run.finished_at|date:"H:i:s" }}{% else %}<span class="muted">&mdash;</span>{% endif %}
+          </td>
+          <td style="font-size:12px">{{ run.error_message|truncatechars:80 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma execução registrada.</p>
+  {% endif %}
+</section>
+{% endblock %}

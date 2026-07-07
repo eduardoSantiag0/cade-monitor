@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Assinantes — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Assinantes</h2>
+      <p>Pessoas e equipes que recebem notificações de mudanças.</p>
+    </div>
+    <a href="{% url 'subscribers:create' %}" class="btn">+ Novo assinante</a>
+  </div>
+  {% if subscribers %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>E-mail</th><th>Telefone</th><th>Processos</th><th>Canais</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for subscriber in subscribers %}
+        <tr>
+          <td><strong>{{ subscriber.name }}</strong></td>
+          <td class="muted" style="font-size:12px">{{ subscriber.email|default:"&mdash;" }}</td>
+          <td class="muted" style="font-size:12px">{{ subscriber.phone|default:"&mdash;" }}</td>
+          <td>{{ subscriber.subscriptions.count }}</td>
+          <td style="font-size:12px">
+            {% if subscriber.email_enabled %}📧 E-mail{% endif %}
+            {% if subscriber.whatsapp_enabled %}&nbsp;📱 WA{% endif %}
+          </td>
+          <td>
+            {% if subscriber.silent_mode %}
+              <span class="badge badge-archived">Silencioso</span>
+            {% elif subscriber.paused_until %}
+              <span class="badge badge-paused">Pausado</span>
+            {% else %}
+              <span class="badge badge-active">Ativo</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'subscribers:detail' subscriber.pk %}" class="btn btn-light btn-sm">Ver</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum assinante cadastrado. <a href="{% url 'subscribers:create' %}">Adicionar</a>.</p>
+  {% endif %}
+</section>
+{% endblock %}

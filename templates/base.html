@@ -1,0 +1,51 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}CADE Monitor{% endblock %}</title>
+        <link rel="stylesheet" href="{% static 'css/main.css' %}" />
+        {% block extra_css %}{% endblock %}
+    </head>
+    <body>
+        <header>
+            <div class="topbar">
+                <div class="brand">
+                    <div class="brand-mark">CM</div>
+                    <div>
+                        <h1>CADE Monitor</h1>
+                        <p>Radar de acompanhamento de processos públicos</p>
+                    </div>
+                </div>
+                <nav class="header-meta">
+                    <a href="{% url 'dashboard:index' %}" class="meta-pill"
+                        >Dashboard</a
+                    >
+                    <a href="{% url 'processes:list' %}" class="meta-pill"
+                        >Processos</a
+                    >
+                    <a href="{% url 'subscribers:list' %}" class="meta-pill"
+                        >Assinantes</a
+                    >
+                    <a
+                        href="{% url 'dashboard:notifications' %}"
+                        class="meta-pill"
+                        >Notificações</a
+                    >
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'admin:index' %}" class="meta-pill"
+                        >Admin</a
+                    >
+                    {% endif %}
+                </nav>
+            </div>
+        </header>
+
+        <main>
+            {% if messages %} {% for message in messages %}
+            <div class="flash {{ message.tags }}">{{ message }}</div>
+            {% endfor %} {% endif %} {% block content %}{% endblock %}
+        </main>
+    </body>
+</html>

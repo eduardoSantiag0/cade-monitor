@@ -170,7 +170,7 @@ Importante: voce colou credenciais de servidor na conversa. Troque essa senha no
 - Na primeira leitura, o sistema grava uma linha de base e nao notifica.
 - Nas leituras seguintes, se o texto publico extraido mudar, ele registra a movimentacao e dispara alertas.
 - E-mail usa SMTP configurado por variaveis de ambiente.
-- WhatsApp e opcional via Meta WhatsApp Cloud API ou Twilio.
+- WhatsApp e opcional via Evolution API.
 
 Nao existe push se a fonte e apenas uma pagina publica. O comportamento mais rapido e seguro e polling curto. Para algo realmente instantaneo, seria necessario um webhook/API oficial do orgao ou acesso a uma fonte que publique eventos em tempo real.
 
@@ -262,22 +262,16 @@ Sem SMTP configurado, a movimentacao fica registrada, mas a notificacao de e-mai
 
 ## Configurar WhatsApp
 
-WhatsApp proativo normalmente exige provedor oficial e, em muitos cenarios, modelo de mensagem aprovado. As duas opcoes previstas no MVP:
+O provider de WhatsApp deste projeto e exclusivamente a Evolution API.
 
-Meta WhatsApp Cloud API:
+Variaveis no .env:
 
-    WHATSAPP_PROVIDER=meta
-    WHATSAPP_META_TOKEN=token
-    WHATSAPP_META_PHONE_NUMBER_ID=id_do_numero
+    EVOLUTION_ENABLED=true
+    EVOLUTION_API_BASE_URL=http://localhost:8080
+    EVOLUTION_API_KEY=sua_chave
+    EVOLUTION_INSTANCE_NAME=cade-monitor
 
-Twilio WhatsApp:
-
-    WHATSAPP_PROVIDER=twilio
-    TWILIO_ACCOUNT_SID=sid
-    TWILIO_AUTH_TOKEN=token
-    TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-
-Se a API retornar erro por template/sessao, o app registra a falha em notifications. Para producao, o proximo passo e implementar mensagens template aprovadas para o provedor escolhido.
+Se a Evolution API retornar erro de envio ou instancia desconectada, o app registra a falha em notifications.
 
 ## Cadastrar um processo
 

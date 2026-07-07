@@ -1,0 +1,117 @@
+# ---------------------------------------------------------------------------
+# Docker Compose — CADE Monitor
+#
+# Serviços:
+#   web    — Gunicorn servindo a aplicação Django
+#   worker — Loop de monitoramento (run_worker)
+#
+# A Evolution API pode rodar em container separado ou em outro host.
+# Se rodar junto, adicione o serviço conforme documentação da Evolution API.
+#
+# Uso:
+#   cp .env.example .env && nano .env
+#   docker compose up -d
+#   docker compose exec web python manage.py migrate
+#   docker compose exec web python manage.py createsuperuser
+# ---------------------------------------------------------------------------
+version: "3.9"
+
+services:
+    web:
+        build: .
+        restart: unless-stopped
+        # 1 worker + 2 threads: econômico para VM pequena.
+        # Aumente workers só se a VM tiver mais de 1 núcleo e memória disponível.
+        command: >
+            gunicorn config.wsgi:application
+              --bind 0.0.0.0:8000
+              --workers 1
+              --threads 2
+              --timeout 60
+              --access-logfile -
+              --error-logfile -
+        ports:
+            - "8000:8000"
+        env_file: .env
+        volumes:
+            # SQLite e logs ficam fora da imagem — persistem entre deploys e rebuilds
+            - ./data:/app/data
+            - ./logs:/app/logs
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/admin/login/"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 20s
+
+    worker:
+        build: .
+        restart: unless-stopped
+        command: python manage.py run_worker
+        env_file: .env
+        volumes:
+            - ./data:/app/data
+            - ./logs:/app/logs
+        depends_on:
+            web:
+                condition: service_healthy
+
+    # Scheduler: roda o digest diário às 8h e o backup às 3h.
+    # Usa o mesmo Dockerfile do web/worker — nenhuma imagem extra.
+    scheduler:
+        build: .
+        restart: unless-stopped
+        # Formato cron: min hora dia mês dia-semana
+        # Requer que o container tenha cron instalado.
+        # Alternativa simples sem dependências extras: loop com sleep.
+        command: >
+            sh -c "while true; do
+              python manage.py generate_daily_digest;
+              python manage.py backup_db --dest /app/backups --keep 7;
+              python manage.py cleanup_snapshots;
+              sleep 86400;
+            done"
+        env_file: .env
+        volumes:
+            - ./data:/app/data
+            - ./logs:/app/logs
+            - ./backups:/app/backups
+        depends_on:
+            web:
+                condition: service_healthy
+
+    # ---- Exemplo de Evolution API (descomente se quiser rodar junto) ----
+    evolution-api:
+        image: evoapicloud/evolution-api:v2.1.1
+        restart: unless-stopped
+        ports:
+            - "8080:8080"
+        environment:
+            - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+            - DATABASE_ENABLED=true
+            - DATABASE_PROVIDER=postgresql
+            - DATABASE_CONNECTION_URI=postgresql://postgres:postgres@evolution-db:5432/evolution?schema=public
+            - DATABASE_CONNECTION_CLIENT_NAME=cade_monitor
+            - CACHE_REDIS_ENABLED=true
+            - CACHE_REDIS_URI=redis://evolution-redis:6379/6
+        volumes:
+            - ./data/evolution:/evolution/instances
+        depends_on:
+            - evolution-db
+            - evolution-redis
+
+    evolution-db:
+        image: postgres:16-alpine
+        restart: unless-stopped
+        environment:
+            - POSTGRES_DB=evolution
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+        volumes:
+            - ./data/evolution-postgres:/var/lib/postgresql/data
+
+    evolution-redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+        volumes:
+            - ./data/evolution-redis:/data

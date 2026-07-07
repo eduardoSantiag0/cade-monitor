@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Notificações — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Notificações</h2>
+      <p>Histórico de envios e status.</p>
+    </div>
+    <div class="actions">
+      <form method="post" action="{% url 'dashboard:send_test_email' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-sm">Enviar e-mail teste</button>
+      </form>
+      <form method="post" action="{% url 'dashboard:send_test_whatsapp' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-sm">Enviar WhatsApp teste</button>
+      </form>
+      <form method="get">
+        <select name="status" onchange="this.form.submit()" style="min-width:160px">
+          <option value="">Todos os status</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+
+  {% if notifications %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Canal</th><th>Destino</th><th>Processo</th>
+          <th>Status</th><th>Tentativas</th><th>Enviado em</th><th>Criado em</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for n in notifications %}
+        <tr>
+          <td class="muted" style="font-size:12px">{{ n.pk }}</td>
+          <td>
+            {% if n.channel == 'email' %}📧{% else %}📱{% endif %}
+            {{ n.get_channel_display }}
+          </td>
+          <td style="font-size:12px">{{ n.destination|truncatechars:40 }}</td>
+          <td>
+            {% if n.change.process %}
+              <a href="{% url 'processes:detail' n.change.process.pk %}"
+                 style="text-decoration:none;color:inherit;font-size:12px">{{ n.change.process.label|truncatechars:40 }}</a>
+            {% else %}
+              <span class="muted">&mdash;</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-{{ n.status }}">{{ n.get_status_display }}</span></td>
+          <td style="font-size:12px;text-align:center">{{ n.attempts }}</td>
+          <td style="font-size:12px">
+            {% if n.sent_at %}{{ n.sent_at|date:"d/m H:i" }}{% else %}<span class="muted">&mdash;</span>{% endif %}
+          </td>
+          <td style="font-size:12px">{{ n.created_at|date:"d/m H:i" }}</td>
+        </tr>
+        {% if n.error_message %}
+        <tr style="background:#fff8f8">
+          <td></td>
+          <td colspan="7" style="font-size:12px;color:var(--danger);padding-top:2px">
+            ⚠ {{ n.error_message|truncatechars:200 }}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">
+    Nenhuma notificação encontrada
+    {% if status_filter %}com status "{{ status_filter }}"{% endif %}.
+  </p>
+  {% endif %}
+</section>
+{% endblock %}
