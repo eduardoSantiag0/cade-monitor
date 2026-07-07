@@ -1,0 +1,6 @@
+# Prettier não entende a sintaxe de template Django ({{ }}, {% %})
+# e quebra as tags quando formata esses arquivos.
+# Mantenha todos os templates Django excluídos do Prettier.
+templates/
+staticfiles/
+static/
