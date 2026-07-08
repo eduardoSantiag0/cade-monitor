@@ -33,6 +33,8 @@ services:
         ports:
             - "8000:8000"
         env_file: .env
+        environment:
+            - EVOLUTION_API_BASE_URL=${EVOLUTION_API_BASE_URL_INTERNAL:-http://evolution-api:8080}
         volumes:
             # SQLite e logs ficam fora da imagem — persistem entre deploys e rebuilds
             - ./data:/app/data
@@ -49,6 +51,8 @@ services:
         restart: unless-stopped
         command: python manage.py run_worker
         env_file: .env
+        environment:
+            - EVOLUTION_API_BASE_URL=${EVOLUTION_API_BASE_URL_INTERNAL:-http://evolution-api:8080}
         volumes:
             - ./data:/app/data
             - ./logs:/app/logs
@@ -72,6 +76,8 @@ services:
               sleep 86400;
             done"
         env_file: .env
+        environment:
+            - EVOLUTION_API_BASE_URL=${EVOLUTION_API_BASE_URL_INTERNAL:-http://evolution-api:8080}
         volumes:
             - ./data:/app/data
             - ./logs:/app/logs
@@ -82,23 +88,35 @@ services:
 
     # ---- Exemplo de Evolution API (descomente se quiser rodar junto) ----
     evolution-api:
-        image: evoapicloud/evolution-api:v2.1.1
+        image: evoapicloud/evolution-api:v2.3.7
         restart: unless-stopped
         ports:
             - "8080:8080"
         environment:
             - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+            - CONFIG_SESSION_PHONE_VERSION=${CONFIG_SESSION_VERSION}
+            - WEBSOCKET_ENABLED=${WEBSOCKET_ENABLED}
+            - WEBSOCKET_GLOBAL_EVENTS=${WEBSOCKET_GLOBAL_EVENTS}
+            - QRCODE_LIMIT=${QRCODE_LIMIT}
+            - QRCODE_COLOR=${QRCODE_COLOR}
+            - RABBITMQ_EVENTS_QRCODE_UPDATED=${RABBITMQ_EVENTS_QRCODE_UPDATED}
             - DATABASE_ENABLED=true
             - DATABASE_PROVIDER=postgresql
             - DATABASE_CONNECTION_URI=postgresql://postgres:postgres@evolution-db:5432/evolution?schema=public
             - DATABASE_CONNECTION_CLIENT_NAME=cade_monitor
-            - CACHE_REDIS_ENABLED=true
-            - CACHE_REDIS_URI=redis://evolution-redis:6379/6
+            - CACHE_REDIS_ENABLED=false
+            - CACHE_LOCAL_ENABLED=true
+            - DATABASE_SAVE_DATA_CHATS=false
+            - DATABASE_SAVE_DATA_CONTACTS=false
+            - DATABASE_SAVE_DATA_HISTORIC=false
+            - DATABASE_SAVE_DATA_LABELS=false
         volumes:
             - ./data/evolution:/evolution/instances
         depends_on:
-            - evolution-db
-            - evolution-redis
+            evolution-db:
+                condition: service_healthy
+            evolution-redis:
+                condition: service_healthy
 
     evolution-db:
         image: postgres:16-alpine
@@ -109,9 +127,21 @@ services:
             - POSTGRES_PASSWORD=postgres
         volumes:
             - ./data/evolution-postgres:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres -d evolution"]
+            interval: 10s
+            timeout: 5s
+            retries: 6
+            start_period: 10s
 
     evolution-redis:
         image: redis:7-alpine
         restart: unless-stopped
         volumes:
             - ./data/evolution-redis:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 6
+            start_period: 5s

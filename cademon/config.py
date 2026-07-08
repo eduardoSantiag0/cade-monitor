@@ -61,7 +61,7 @@ class Config:
             whatsapp_provider=os.getenv('WHATSAPP_PROVIDER', 'evolution').strip().lower(),
             evolution_enabled=as_bool(os.getenv('EVOLUTION_ENABLED'), False),
             evolution_api_base_url=os.getenv('EVOLUTION_API_BASE_URL', '').rstrip('/'),
-            evolution_api_key=os.getenv('EVOLUTION_API_KEY', ''),
+            evolution_api_key=os.getenv('AUTHENTICATION_API_KEY') or os.getenv('EVOLUTION_API_KEY', ''),
             evolution_instance_name=os.getenv('EVOLUTION_INSTANCE_NAME', 'cade-monitor'),
             evolution_timeout_seconds=max(5, as_int(os.getenv('EVOLUTION_TIMEOUT_SECONDS'), 15)),
         )

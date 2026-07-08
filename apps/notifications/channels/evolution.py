@@ -32,7 +32,7 @@ def send_whatsapp_notification(phone: str, body: str) -> tuple[str, str | None]:
         return 'channel_not_configured', 'EVOLUTION_API_BASE_URL não configurado'
 
     if not settings.EVOLUTION_API_KEY:
-        return 'channel_not_configured', 'EVOLUTION_API_KEY não configurado'
+        return 'channel_not_configured', 'Configure AUTHENTICATION_API_KEY ou EVOLUTION_API_KEY'
 
     phone = _normalize_phone(phone)
     if not phone:

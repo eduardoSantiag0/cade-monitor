@@ -1,7 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.timezone import localtime
+from django.views.decorators.http import require_POST
 
 from apps.monitoring.models import CheckRun, DetectedChange
 
@@ -9,6 +12,13 @@ from .forms import ProcessForm
 from .models import MonitoredProcess, ProcessStatus
 from .selectors import get_all_processes, get_filtered_processes
 from .services import create_process, update_process_status
+
+
+def _format_process_last_update(process: MonitoredProcess) -> str:
+    last_update = process.last_changed_at or process.last_checked_at or process.updated_at
+    if not last_update:
+        return 'Nao disponivel'
+    return localtime(last_update).strftime('%d/%m/%Y %H:%M')
 
 
 @login_required
@@ -101,6 +111,151 @@ def process_check_now(request, pk):
             messages.success(request, f'Verificação concluída: {result["message"]}')
         else:
             messages.error(request, f'Erro: {result["message"]}')
+    return redirect('processes:detail', pk=pk)
+
+
+@login_required
+@require_POST
+def process_notify_subscribers(request, pk):
+    """Envia aviso manual para assinantes do processo conforme preferências por canal."""
+    process = get_object_or_404(MonitoredProcess, pk=pk)
+    subscriptions = process.subscriptions.select_related('subscriber').all()
+
+    from apps.notifications.channels.email import send_email_notification
+    from apps.notifications.channels.evolution import send_whatsapp_notification
+
+    sent_email = 0
+    sent_whatsapp = 0
+    failed_email = 0
+    failed_whatsapp = 0
+
+    subject = f'[CADE Monitor] Aviso manual: {process.label}'[:180]
+    last_update_text = _format_process_last_update(process)
+    email_body = (
+        'Este e um envio manual feito pela tela de detalhes do processo no CADE Monitor.\n\n'
+        f'Processo: {process.label}\n'
+        f'URL: {process.effective_url}\n\n'
+        'Se recebeu este aviso, suas preferencias de notificacao para este processo estao ativas.'
+    )
+    whatsapp_body = (
+        '📢 *CADE Monitor*\n'
+        'Envio manual para assinantes do processo.\n\n'
+        f'📁 *Processo:* {process.label}\n'
+        f'🔗 *Link do processo:* {process.effective_url}\n'
+        f'🕒 *Ultima atualizacao:* {last_update_text}\n\n'
+        '✅ Se recebeu este aviso, suas preferencias de notificacao estao ativas.'
+    )
+
+    for subscription in subscriptions:
+        subscriber = subscription.subscriber
+        if not subscriber.is_reachable():
+            continue
+
+        if subscription.email_enabled and subscriber.email_enabled and subscriber.email:
+            status, _error = send_email_notification(
+                to_address=subscriber.email,
+                subject=subject,
+                body=email_body,
+            )
+            if status == 'sent':
+                sent_email += 1
+            else:
+                failed_email += 1
+
+        if (
+            settings.EVOLUTION_ENABLED
+            and subscription.whatsapp_enabled
+            and subscriber.whatsapp_enabled
+            and subscriber.phone
+        ):
+            status, _error = send_whatsapp_notification(
+                phone=subscriber.phone,
+                body=whatsapp_body,
+            )
+            if status == 'sent':
+                sent_whatsapp += 1
+            else:
+                failed_whatsapp += 1
+
+    if (sent_email + sent_whatsapp + failed_email + failed_whatsapp) == 0:
+        messages.warning(
+            request,
+            'Nenhum assinante elegivel para envio manual neste processo.',
+        )
+    else:
+        messages.success(
+            request,
+            (
+                'Envio manual concluido. '
+                f'E-mail enviados: {sent_email}, falhas: {failed_email}. '
+                f'WhatsApp enviados: {sent_whatsapp}, falhas: {failed_whatsapp}.'
+            ),
+        )
+
+    return redirect('processes:detail', pk=pk)
+
+
+@login_required
+@require_POST
+def process_send_test_whatsapp(request, pk):
+    """Envia WhatsApp de teste para assinantes elegiveis do processo."""
+    process = get_object_or_404(MonitoredProcess, pk=pk)
+    subscriptions = process.subscriptions.select_related('subscriber').all()
+
+    from apps.notifications.channels.evolution import send_whatsapp_notification
+
+    last_update_text = _format_process_last_update(process)
+    template_body = (
+        '🧪 *Teste de WhatsApp - CADE Monitor*\n\n'
+        'Este e um envio de teste feito pela tela de detalhes do processo.\n\n'
+        f'📁 *Processo:* {process.label}\n'
+        f'🔗 *Link do processo:* {process.effective_url}\n'
+        f'🕒 *Ultima atualizacao:* {last_update_text}\n\n'
+        '✅ Se recebeu esta mensagem, o canal de WhatsApp esta funcionando.'
+    )
+
+    sent_whatsapp = 0
+    failed_whatsapp = 0
+    failure_details: list[str] = []
+
+    for subscription in subscriptions:
+        subscriber = subscription.subscriber
+        if not subscriber.is_reachable():
+            continue
+
+        if (
+            settings.EVOLUTION_ENABLED
+            and subscriber.whatsapp_enabled
+            and subscriber.phone
+        ):
+            status, _error = send_whatsapp_notification(
+                phone=subscriber.phone,
+                body=template_body,
+            )
+            if status == 'sent':
+                sent_whatsapp += 1
+            else:
+                failed_whatsapp += 1
+                if _error:
+                    failure_details.append(f'{subscriber.name}: {_error}')
+
+    if (sent_whatsapp + failed_whatsapp) == 0:
+        messages.warning(
+            request,
+            'Nenhum assinante com WhatsApp habilitado neste processo para envio de teste.',
+        )
+    else:
+        detail = ''
+        if failure_details:
+            detail = f' Detalhes: {" | ".join(failure_details[:3])}'
+        messages.success(
+            request,
+            (
+                f'WhatsApp teste concluido. Enviados: {sent_whatsapp}. '
+                f'Falhas: {failed_whatsapp}.{detail}'
+            ),
+        )
+
     return redirect('processes:detail', pk=pk)
 
 

@@ -150,7 +150,9 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 # ---------------------------------------------------------------------------
 EVOLUTION_ENABLED = os.environ.get('EVOLUTION_ENABLED', 'false').lower() in ('1', 'true', 'yes')
 EVOLUTION_API_BASE_URL = os.environ.get('EVOLUTION_API_BASE_URL', '').rstrip('/')
-EVOLUTION_API_KEY = os.environ.get('EVOLUTION_API_KEY', '')
+# Evolution aceita chave global (AUTHENTICATION_API_KEY) ou token de instância.
+AUTHENTICATION_API_KEY = os.environ.get('AUTHENTICATION_API_KEY', '')
+EVOLUTION_API_KEY = AUTHENTICATION_API_KEY or os.environ.get('EVOLUTION_API_KEY', '')
 EVOLUTION_INSTANCE_NAME = os.environ.get('EVOLUTION_INSTANCE_NAME', 'cade-monitor')
 EVOLUTION_TIMEOUT_SECONDS = int(os.environ.get('EVOLUTION_TIMEOUT_SECONDS', '15'))
 

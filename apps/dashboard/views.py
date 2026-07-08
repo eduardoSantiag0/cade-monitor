@@ -47,8 +47,9 @@ def notifications_list(request):
 def _get_test_email_destination() -> str:
     subscriber = (
         Subscriber.objects
-        .filter(email_enabled=True)
+        .filter(email_enabled=True, subscriptions__email_enabled=True)
         .exclude(email='')
+        .distinct()
         .order_by('id')
         .first()
     )

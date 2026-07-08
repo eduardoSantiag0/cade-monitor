@@ -17,6 +17,14 @@
         {% csrf_token %}
         <button type="submit" class="btn btn-light btn-sm">↻ Checar agora</button>
       </form>
+      <form method="post" action="{% url 'processes:test_whatsapp' process.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-sm">Enviar WhatsApp teste</button>
+      </form>
+      <form method="post" action="{% url 'processes:notify_subscribers' process.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-light btn-sm">Enviar aviso aos assinantes</button>
+      </form>
       <a href="{% url 'processes:edit' process.pk %}" class="btn btn-light btn-sm">Editar</a>
       <form method="post" action="{% url 'processes:toggle' process.pk %}">
         {% csrf_token %}

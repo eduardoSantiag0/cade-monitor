@@ -194,14 +194,21 @@ class NotificationActionsViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')
         self.client.login(username='admin', password='password')
+        self.process = _make_process(source='https://sei.cade.gov.br/notif-test')
 
     @patch('apps.notifications.channels.email.send_email_notification')
     def test_send_test_email_success(self, send_email_notification):
         send_email_notification.return_value = ('sent', None)
-        Subscriber.objects.create(
+        subscriber = Subscriber.objects.create(
             name='Email User',
             email='email.user@example.com',
             email_enabled=True,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=subscriber,
+            process=self.process,
+            email_enabled=True,
+            whatsapp_enabled=False,
         )
 
         response = self.client.post(reverse('dashboard:send_test_email'))
@@ -219,9 +226,15 @@ class NotificationActionsViewTest(TestCase):
     @patch('apps.notifications.channels.evolution.send_whatsapp_notification')
     def test_send_test_whatsapp_success(self, send_whatsapp_notification):
         send_whatsapp_notification.return_value = ('sent', None)
-        Subscriber.objects.create(
+        subscriber = Subscriber.objects.create(
             name='WA User',
             phone='5511999998888',
+            whatsapp_enabled=True,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=subscriber,
+            process=self.process,
+            email_enabled=False,
             whatsapp_enabled=True,
         )
 
@@ -231,8 +244,192 @@ class NotificationActionsViewTest(TestCase):
         self.assertEqual(response.url, reverse('dashboard:notifications'))
         send_whatsapp_notification.assert_called_once()
 
+    @patch('apps.notifications.channels.evolution.send_whatsapp_notification')
+    def test_send_test_whatsapp_success_without_process_subscription_flag(self, send_whatsapp_notification):
+        send_whatsapp_notification.return_value = ('sent', None)
+        Subscriber.objects.create(
+            name='WA Global',
+            phone='5511912345678',
+            whatsapp_enabled=True,
+        )
+
+        response = self.client.post(reverse('dashboard:send_test_whatsapp'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('dashboard:notifications'))
+        send_whatsapp_notification.assert_called_once_with(
+            phone='5511912345678',
+            body=(
+                'CADE Monitor: esta e uma mensagem de teste enviada pela tela de notificacoes.\n\n'
+                'Se chegou aqui, o canal WhatsApp esta funcionando.'
+            ),
+        )
+
     def test_send_test_whatsapp_without_destination(self):
         response = self.client.post(reverse('dashboard:send_test_whatsapp'), follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Nenhum assinante com WhatsApp habilitado foi encontrado para teste.')
+
+    @patch('apps.notifications.channels.evolution.send_whatsapp_notification')
+    def test_send_test_whatsapp_uses_only_enabled_subscribers(self, send_whatsapp_notification):
+        send_whatsapp_notification.return_value = ('sent', None)
+        wa_enabled = Subscriber.objects.create(
+            name='WA On',
+            phone='5511911111111',
+            whatsapp_enabled=True,
+        )
+        wa_disabled = Subscriber.objects.create(
+            name='WA Off',
+            phone='5511922222222',
+            whatsapp_enabled=False,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=wa_enabled,
+            process=self.process,
+            email_enabled=False,
+            whatsapp_enabled=True,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=wa_disabled,
+            process=self.process,
+            email_enabled=False,
+            whatsapp_enabled=True,
+        )
+
+        response = self.client.post(reverse('dashboard:send_test_whatsapp'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('dashboard:notifications'))
+        send_whatsapp_notification.assert_called_once_with(
+            phone='5511911111111',
+            body=(
+                'CADE Monitor: esta e uma mensagem de teste enviada pela tela de notificacoes.\n\n'
+                'Se chegou aqui, o canal WhatsApp esta funcionando.'
+            ),
+        )
+
+
+class ProcessNotificationActionViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')
+        self.client.login(username='admin', password='password')
+        self.process = _make_process(source='https://sei.cade.gov.br/process-notify')
+
+    @patch('apps.notifications.channels.evolution.send_whatsapp_notification')
+    @patch('apps.notifications.channels.email.send_email_notification')
+    def test_notify_subscribers_respects_channel_preferences(self, send_email_notification, send_whatsapp_notification):
+        send_email_notification.return_value = ('sent', None)
+        send_whatsapp_notification.return_value = ('sent', None)
+
+        full = Subscriber.objects.create(
+            name='Full',
+            email='full@example.com',
+            phone='5511933333333',
+            email_enabled=True,
+            whatsapp_enabled=True,
+        )
+        email_only = Subscriber.objects.create(
+            name='Email Only',
+            email='email.only@example.com',
+            phone='5511944444444',
+            email_enabled=True,
+            whatsapp_enabled=True,
+        )
+        wa_global_off = Subscriber.objects.create(
+            name='WA Global Off',
+            email='wa.off@example.com',
+            phone='5511955555555',
+            email_enabled=True,
+            whatsapp_enabled=False,
+        )
+
+        ProcessSubscription.objects.create(
+            subscriber=full,
+            process=self.process,
+            email_enabled=True,
+            whatsapp_enabled=True,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=email_only,
+            process=self.process,
+            email_enabled=True,
+            whatsapp_enabled=False,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=wa_global_off,
+            process=self.process,
+            email_enabled=False,
+            whatsapp_enabled=True,
+        )
+
+        response = self.client.post(
+            reverse('processes:notify_subscribers', kwargs={'pk': self.process.pk})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.url,
+            reverse('processes:detail', kwargs={'pk': self.process.pk}),
+        )
+        self.assertEqual(send_email_notification.call_count, 2)
+        self.assertEqual(send_whatsapp_notification.call_count, 1)
+
+    @patch('apps.notifications.channels.evolution.send_whatsapp_notification')
+    def test_process_test_whatsapp_sends_only_to_eligible_subscribers(self, send_whatsapp_notification):
+        send_whatsapp_notification.return_value = ('sent', None)
+
+        wa_enabled = Subscriber.objects.create(
+            name='WA Enabled',
+            phone='5511966666666',
+            whatsapp_enabled=True,
+        )
+        wa_subscription_off = Subscriber.objects.create(
+            name='WA Sub Off',
+            phone='5511977777777',
+            whatsapp_enabled=True,
+        )
+        wa_global_off = Subscriber.objects.create(
+            name='WA Global Off',
+            phone='5511988888888',
+            whatsapp_enabled=False,
+        )
+
+        ProcessSubscription.objects.create(
+            subscriber=wa_enabled,
+            process=self.process,
+            email_enabled=False,
+            whatsapp_enabled=True,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=wa_subscription_off,
+            process=self.process,
+            email_enabled=False,
+            whatsapp_enabled=False,
+        )
+        ProcessSubscription.objects.create(
+            subscriber=wa_global_off,
+            process=self.process,
+            email_enabled=False,
+            whatsapp_enabled=True,
+        )
+
+        response = self.client.post(
+            reverse('processes:test_whatsapp', kwargs={'pk': self.process.pk})
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.url,
+            reverse('processes:detail', kwargs={'pk': self.process.pk}),
+        )
+        self.assertEqual(send_whatsapp_notification.call_count, 2)
+        called = {call.kwargs['phone']: call.kwargs['body'] for call in send_whatsapp_notification.call_args_list}
+        self.assertIn('5511966666666', called)
+        self.assertIn('5511977777777', called)
+
+        for body in called.values():
+            self.assertIn('🧪 *Teste de WhatsApp - CADE Monitor*', body)
+            self.assertIn(f'📁 *Processo:* {self.process.label}', body)
+            self.assertIn(f'🔗 *Link do processo:* {self.process.effective_url}', body)
+            self.assertIn('🕒 *Ultima atualizacao:*', body)
