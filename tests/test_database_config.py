@@ -129,3 +129,10 @@ class TelegramEnvTest(SimpleTestCase):
 
     def test_disabled_by_default_needs_nothing(self):
         self.assertFalse(_env().telegram_enabled)
+
+
+class ProxySettingsTest(SimpleTestCase):
+    def test_csrf_trusted_origins_from_https_base_url(self):
+        self.assertEqual(_env(BASE_URL='https://cade.onrender.com/').csrf_trusted_origins, ['https://cade.onrender.com'])
+        self.assertEqual(_env(BASE_URL='http://localhost:8000').csrf_trusted_origins, [])
+        self.assertEqual(_env().csrf_trusted_origins, [])

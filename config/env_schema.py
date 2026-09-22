@@ -143,6 +143,11 @@ class EnvSettings(BaseModel):
     def _strip_base_url_slash(cls, value: str) -> str:
         return value.strip().rstrip('/')
 
+    @property
+    def csrf_trusted_origins(self) -> list[str]:
+        """Origem HTTPS pública (BASE_URL) aceita pelo CSRF atrás do proxy (Render)."""
+        return [self.base_url] if self.base_url.startswith('https://') else []
+
     @field_validator('telegram_bot_username', mode='after')
     @classmethod
     def _strip_at(cls, value: str) -> str:

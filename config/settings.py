@@ -248,6 +248,11 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # O Render (e proxies reversos em geral) termina o HTTPS e repassa HTTP ao
+    # container. Sem isto, request.is_secure() é False e o CSRF recusa o login
+    # no /admin ("Origin checking failed").
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    CSRF_TRUSTED_ORIGINS = env.csrf_trusted_origins
 
 # ---------------------------------------------------------------------------
 # Rastreamento de erros (Sentry ou compatível) — opcional, ativado por SENTRY_DSN

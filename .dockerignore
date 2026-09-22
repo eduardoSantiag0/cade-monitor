@@ -1,0 +1,16 @@
+# Nada disto deve entrar na imagem Docker (segredos, dados locais, lixo de build).
+.env
+.env.*
+!.env.example
+data/
+backups/
+logs/*.log
+logs/*.log.*
+.venv/
+venv/
+.git/
+**/__pycache__/
+*.pyc
+staticfiles/
+.vscode/
+.idea/
