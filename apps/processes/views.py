@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.timezone import localtime
 from django.views.decorators.http import require_POST
 
-from apps.monitoring.extractors import extract_protocol_records
+from apps.monitoring.extractors import latest_protocol_record
 from apps.monitoring.models import CheckRun, DetectedChange
 
 from .forms import ProcessForm
@@ -38,21 +38,7 @@ def _latest_protocol_record(change: DetectedChange) -> dict | None:
 
 def _latest_protocol_record_from_text(snapshot_text: str) -> dict | None:
     """Retorna o protocolo mais recente da lista a partir de texto extraído."""
-    if not snapshot_text:
-        return None
-
-    records = extract_protocol_records(snapshot_text)
-    if not records:
-        return None
-
-    return max(
-        records,
-        key=lambda item: (
-            str(item.get('sort_key') or ''),
-            str(item.get('registry_date') or ''),
-            str(item.get('document') or ''),
-        ),
-    )
+    return latest_protocol_record(snapshot_text)
 
 
 @login_required

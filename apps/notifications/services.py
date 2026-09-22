@@ -305,7 +305,7 @@ def _dispatch_telegram(
     attachment_candidates: list[dict[str, object]],
     unresolved_docs: list[dict[str, str]],
 ) -> tuple[str, str | None]:
-    """Mesmo fluxo do WhatsApp: mensagem principal (ou complemento) + anexos por URL."""
+    """Mensagem principal (ou complemento) + anexos enviados por upload do arquivo baixado."""
     from .channels.telegram import send_telegram_document, send_telegram_message
 
     if include_main_message:
@@ -325,8 +325,9 @@ def _dispatch_telegram(
         attachment = item['attachment']
         doc_status, doc_error = send_telegram_document(
             chat_id=notification.destination,
-            document_url=str(attachment.get('url') or ''),
+            content=attachment.get('content') or b'',
             filename=str(attachment.get('filename') or 'documento'),
+            content_type=str(attachment.get('content_type') or 'application/octet-stream'),
         )
         if doc_status == NotificationStatus.SENT:
             sent_any = True
@@ -365,11 +366,11 @@ def _prepare_attachments_for_channel(
     attachment_candidates: list[dict[str, object]] = []
     unresolved_docs: list[dict[str, str]] = []
 
-    max_bytes = (
-        int(getattr(settings, 'EMAIL_ATTACHMENT_MAX_BYTES', 8 * 1024 * 1024))
-        if notification.channel == NotificationChannel.EMAIL
-        else int(getattr(settings, 'WHATSAPP_ATTACHMENT_MAX_BYTES', 8 * 1024 * 1024))
-    )
+    max_bytes = {
+        NotificationChannel.EMAIL: int(getattr(settings, 'EMAIL_ATTACHMENT_MAX_BYTES', 8 * 1024 * 1024)),
+        # Telegram: upload do arquivo baixado (a Bot API não busca bem URLs do SEI).
+        NotificationChannel.TELEGRAM: int(getattr(settings, 'TELEGRAM_ATTACHMENT_MAX_BYTES', 20 * 1024 * 1024)),
+    }.get(notification.channel, int(getattr(settings, 'WHATSAPP_ATTACHMENT_MAX_BYTES', 8 * 1024 * 1024)))
 
     for state in states:
         doc = state.document
@@ -393,9 +394,9 @@ def _prepare_attachments_for_channel(
             unresolved_docs.append({'document': doc.document_number, 'reason': state.last_error, 'url': ''})
             continue
 
-        if notification.channel in (NotificationChannel.WHATSAPP, NotificationChannel.TELEGRAM):
-            # A Evolution API e o Telegram recebem só a URL pública e buscam o arquivo do
-            # lado deles — o conteúdo baixado aqui nunca seria usado, então não faz
+        if notification.channel == NotificationChannel.WHATSAPP:
+            # A Evolution API recebe só a URL pública e busca o arquivo do lado
+            # dela — o conteúdo baixado aqui nunca seria usado, então não faz
             # sentido gastar banda/memória baixando o documento inteiro só para
             # descartar em seguida (spec 002-repo-hardening-cleanup, FR-009).
             filename = _safe_document_filename(doc.document_number, doc.title, '', doc.url)

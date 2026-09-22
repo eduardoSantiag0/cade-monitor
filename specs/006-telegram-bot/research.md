@@ -157,6 +157,24 @@
   (US2 #4). 403 e "chat not found" → `invalid_recipient` + chat inalcançável. Outros 4xx →
   `failed`.
 
+## R9c — Anexos por upload e /ultima (pós-implementação)
+
+- **Finding**: a Bot API só busca por URL arquivos PDF, GIF e ZIP, e as URLs de documento do
+  SEI costumam servir HTML ou depender de cabeçalhos. O envio por URL (R7) falharia com
+  frequência.
+- **Decision**: o Telegram passa a **baixar o arquivo** (`clients.download_document`, a mesma
+  função do e-mail) e **fazer upload multipart** (`client.send_document_file`), com limite
+  `TELEGRAM_ATTACHMENT_MAX_BYTES` (padrão 20 MB; a Bot API aceita até 50 MB). Falhas de
+  download mantêm o documento pendente para retentativa (`NotificationDocumentState`).
+  O WhatsApp continua por URL.
+- **/ultima**: baixar o documento é acesso ao SEI, então o comando vira
+  `BotAction(kind=latest)` executada pelo worker (Princípio I). O protocolo mais recente vem de
+  `extractors.latest_protocol_record(process.last_text)`, função agora compartilhada com o botão
+  "Enviar última atualização" do painel. O link vem de `DetectedDocument`. Só quando ele é
+  desconhecido o worker consulta **uma vez** a página do processo (`get_snapshot` +
+  `extract_document_links`). A consulta e o download acontecem uma vez por processo por tick,
+  mesmo com vários chats pedindo.
+
 ## R10 — Configuração
 
 - **Decision**: As variáveis `TELEGRAM_*` ficam em `config/env_schema.py`. Validação: se

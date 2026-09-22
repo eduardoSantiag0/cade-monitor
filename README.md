@@ -261,6 +261,7 @@ de movimentação. O WhatsApp e o e-mail continuam disponíveis para assinantes 
 | `/check <processo>` | verifica agora (respeita `TELEGRAM_CHECK_COOLDOWN_SECONDS`) |
 | `/pause`, `/resume <processo>` | pausa/retoma os alertas só para quem pediu |
 | `/history <processo>` | últimas movimentações |
+| `/ultima <processo>` | última atualização com o PDF do documento mais recente |
 
 **Como funciona**
 
@@ -268,7 +269,8 @@ de movimentação. O WhatsApp e o e-mail continuam disponíveis para assinantes 
   vez e **nunca consulta o SEI**. A primeira leitura do `/watch` e o `/check` viram ações
   executadas pelo `run_worker` (uma consulta por processo por ciclo).
 - Cada conversa vira um assinante. Os alertas usam o mesmo fluxo de notificações, tentativas e
-  anexos dos outros canais.
+  anexos dos outros canais. Os documentos novos são **baixados e enviados como arquivo** (até
+  `TELEGRAM_ATTACHMENT_MAX_BYTES`, padrão 20 MB); compactados ou maiores vão só como link.
 - **Grupos:** adicione o bot ao grupo. Só administradores usam `/watch`, `/unwatch`, `/pause`
   e `/resume`. Qualquer membro pode usar `/list`, `/status`, `/history` e `/check`.
 - Limite de `TELEGRAM_MAX_PROCESSES_PER_CHAT` processos por conversa (padrão 10).

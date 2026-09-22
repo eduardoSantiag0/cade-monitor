@@ -10,6 +10,7 @@ import json
 import logging
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -30,6 +31,7 @@ BOT_COMMANDS = [
     ('pause', 'Pausar alertas de um processo'),
     ('resume', 'Retomar alertas de um processo'),
     ('history', 'Últimas movimentações'),
+    ('ultima', 'Última atualização com o PDF do documento'),
     ('help', 'Lista de comandos'),
 ]
 
@@ -52,15 +54,19 @@ class TelegramResult:
 
 def call(method: str, payload: dict | None = None) -> TelegramResult:
     """POST JSON para a Bot API. Erros viram TelegramResult(ok=False)."""
+    return _post(method, json.dumps(payload or {}).encode('utf-8'), 'application/json')
+
+
+def _post(method: str, body: bytes, content_type: str) -> TelegramResult:
     token = settings.TELEGRAM_BOT_TOKEN
     if not token:
         return TelegramResult(ok=False, description='TELEGRAM_BOT_TOKEN não configurado')
 
     request = urllib.request.Request(
         f'{API_BASE}/bot{token}/{method}',
-        data=json.dumps(payload or {}).encode('utf-8'),
+        data=body,
         method='POST',
-        headers={'Content-Type': 'application/json'},
+        headers={'Content-Type': content_type},
     )
     try:
         with urllib.request.urlopen(request, timeout=settings.TELEGRAM_TIMEOUT_SECONDS) as response:
@@ -100,11 +106,38 @@ def send_message(chat_id: int | str, text: str) -> TelegramResult:
     })
 
 
-def send_document(chat_id: int | str, document_url: str, filename: str = '') -> TelegramResult:
-    payload = {'chat_id': chat_id, 'document': document_url}
-    if filename:
-        payload['caption'] = filename[:1024]
-    return call('sendDocument', payload)
+def send_document_file(
+    chat_id: int | str,
+    content: bytes,
+    filename: str,
+    content_type: str = 'application/octet-stream',
+    caption: str = '',
+) -> TelegramResult:
+    """
+    Upload do arquivo (multipart/form-data). Preferível ao envio por URL: a Bot API
+    só busca URLs de PDF/GIF/ZIP, e o SEI costuma servir HTML ou exigir cabeçalhos.
+    """
+    boundary = f'cademonitor-{uuid.uuid4().hex}'
+    fields = {'chat_id': str(chat_id)}
+    if caption:
+        fields['caption'] = caption[:1024]
+    CRLF = b'\r\n'
+    parts: list[bytes] = []
+    for name, value in fields.items():
+        parts.append(
+            f'--{boundary}'.encode() + CRLF
+            + f'Content-Disposition: form-data; name="{name}"'.encode() + CRLF + CRLF
+            + str(value).encode('utf-8') + CRLF
+        )
+    safe_name = ''.join(ch for ch in (filename or 'documento') if ch not in '"\r\n') or 'documento'
+    parts.append(
+        f'--{boundary}'.encode() + CRLF
+        + f'Content-Disposition: form-data; name="document"; filename="{safe_name}"'.encode('utf-8') + CRLF
+        + f'Content-Type: {content_type or "application/octet-stream"}'.encode() + CRLF + CRLF
+        + content + CRLF
+    )
+    parts.append(f'--{boundary}--'.encode() + CRLF)
+    return _post('sendDocument', b''.join(parts), f'multipart/form-data; boundary={boundary}')
 
 
 def get_chat_member(chat_id: int | str, user_id: int) -> TelegramResult:

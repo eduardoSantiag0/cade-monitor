@@ -162,6 +162,7 @@ TELEGRAM_MAX_PROCESSES_PER_CHAT = env.telegram_max_processes_per_chat
 TELEGRAM_CHECK_COOLDOWN_SECONDS = env.telegram_check_cooldown_seconds
 TELEGRAM_HISTORY_LIMIT = env.telegram_history_limit
 TELEGRAM_TIMEOUT_SECONDS = env.telegram_timeout_seconds
+TELEGRAM_ATTACHMENT_MAX_BYTES = env.telegram_attachment_max_bytes
 
 # ---------------------------------------------------------------------------
 # Monitoramento

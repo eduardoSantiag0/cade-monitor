@@ -356,6 +356,18 @@ def cmd_check(chat: TelegramChat, args: str) -> str:
     return messages.check_queued(process.label)
 
 
+def cmd_ultima(chat: TelegramChat, args: str) -> str:
+    """Baixar o documento é acesso ao SEI → vira ação do worker (nunca no webhook)."""
+    subscription, error = _resolve_subscription(chat, args, 'ultima')
+    if error:
+        return error
+    process = subscription.process
+    if not process.has_baseline:
+        return messages.latest_no_data(process.label)
+    queue_action(chat, process, BotActionKind.LATEST)
+    return messages.latest_queued(process.label)
+
+
 COMMANDS: dict[str, Callable[[TelegramChat, str], str]] = {
     'start': cmd_start,
     'help': cmd_help,
@@ -367,4 +379,5 @@ COMMANDS: dict[str, Callable[[TelegramChat, str], str]] = {
     'pause': cmd_pause,
     'resume': cmd_resume,
     'check': cmd_check,
+    'ultima': cmd_ultima,
 }

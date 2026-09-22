@@ -67,6 +67,7 @@ class TelegramUpdate(models.Model):
 class BotActionKind(models.TextChoices):
     INITIAL_WATCH = 'initial_watch', _('Primeira leitura (/watch)')
     CHECK = 'check', _('Verificação sob demanda (/check)')
+    LATEST = 'latest', _('Última atualização com documento (/ultima)')
 
 
 class BotActionStatus(models.TextChoices):

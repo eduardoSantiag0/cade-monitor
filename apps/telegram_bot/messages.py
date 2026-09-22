@@ -17,7 +17,8 @@ COMMANDS_HELP = (
     '/check <processo> — verificar agora\n'
     '/pause <processo> — pausar alertas\n'
     '/resume <processo> — retomar alertas\n'
-    '/history <processo> — últimas movimentações'
+    '/history <processo> — últimas movimentações\n'
+    '/ultima <processo> — última atualização com o PDF do documento'
 )
 
 
@@ -191,3 +192,37 @@ def check_changed(label: str) -> str:
 
 def check_failed(label: str) -> str:
     return f'⚠️ Não consegui consultar {label} agora (SEI indisponível). Tente mais tarde.'
+
+
+def latest_queued(label: str) -> str:
+    return f'📤 Preparando a última atualização de {label}, com o documento. Envio em instantes.'
+
+
+def latest_no_data(label: str) -> str:
+    return (
+        f'Ainda não tenho a primeira leitura de {label}. '
+        'Assim que ela sair, use /ultima de novo.'
+    )
+
+
+def latest_update(label: str, process_url: str, record: dict | None, doc_url: str, change, attachment_note: str) -> str:
+    if record:
+        parts = [record.get(k, '') for k in ('document', 'doc_type', 'doc_date')]
+        doc_line = ' | '.join(p for p in parts if p)
+        extra = ' | '.join(p for p in (
+            f"Registro: {record['registry_date']}" if record.get('registry_date') else '',
+            record.get('unit', ''),
+        ) if p)
+        doc_block = f'📄 Documento mais recente: {doc_line}' + (f'\n{extra}' if extra else '')
+        doc_block += f'\n🔗 {doc_url}' if doc_url else '\n🔗 Link do documento não disponível.'
+    else:
+        doc_block = '📄 Não identifiquei documentos na Lista de Protocolos.'
+    change_block = (
+        f'📝 Última mudança detectada em {fmt_dt(change.detected_at)}:\n{change.summary}'
+        if change else '📝 Nenhuma mudança detectada desde o início do monitoramento.'
+    )
+    note = f'\n\n📎 {attachment_note}' if attachment_note else ''
+    return (
+        f'📣 Última atualização de {label}\n\n{doc_block}\n\n{change_block}{note}'
+        f'\n\n🔗 Processo no SEI/CADE:\n{process_url}'
+    )

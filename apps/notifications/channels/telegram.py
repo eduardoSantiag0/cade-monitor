@@ -20,12 +20,18 @@ def send_telegram_message(chat_id: str, body: str, process_url: str = '') -> tup
     return _to_status(chat_id, client.send_message(chat_id, _fit(body, process_url)))
 
 
-def send_telegram_document(chat_id: str, document_url: str, filename: str) -> tuple[str, str | None]:
+def send_telegram_document(
+    chat_id: str,
+    content: bytes,
+    filename: str,
+    content_type: str = 'application/octet-stream',
+) -> tuple[str, str | None]:
+    """Envia o arquivo já baixado do SEI (upload multipart)."""
     if not settings.TELEGRAM_ENABLED or not settings.TELEGRAM_BOT_TOKEN:
         return 'channel_not_configured', 'Telegram desabilitado (TELEGRAM_ENABLED/TELEGRAM_BOT_TOKEN)'
-    if not document_url:
-        return 'failed', 'Documento sem URL pública'
-    return _to_status(chat_id, client.send_document(chat_id, document_url, filename))
+    if not content:
+        return 'failed', 'Documento sem conteúdo para envio'
+    return _to_status(chat_id, client.send_document_file(chat_id, content, filename, content_type))
 
 
 def _fit(body: str, process_url: str) -> str:

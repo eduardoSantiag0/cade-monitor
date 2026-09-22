@@ -68,6 +68,8 @@ class EnvSettings(BaseModel):
     telegram_check_cooldown_seconds: int = 300
     telegram_history_limit: int = 5
     telegram_timeout_seconds: int = 10
+    # Upload de bots: até 50 MB na Bot API; 20 MB mantém memória do worker sob controle.
+    telegram_attachment_max_bytes: int = 20 * 1024 * 1024
 
     # Monitoramento
     check_interval_seconds: int = 1500
@@ -246,6 +248,7 @@ class EnvSettings(BaseModel):
             'telegram_enabled', 'telegram_bot_token', 'telegram_webhook_secret',
             'telegram_bot_username', 'telegram_max_processes_per_chat',
             'telegram_check_cooldown_seconds', 'telegram_history_limit', 'telegram_timeout_seconds',
+            'telegram_attachment_max_bytes',
         ):
             _set(field, field.upper(), cls.model_fields[field].default)
         _set('check_interval_seconds', 'CHECK_INTERVAL_SECONDS', cls.model_fields['check_interval_seconds'].default)

@@ -307,6 +307,21 @@ def extract_protocol_records(text: str) -> list[dict[str, str]]:
     return records
 
 
+def latest_protocol_record(text: str | None) -> dict[str, str] | None:
+    """Protocolo mais recente da Lista de Protocolos (por data de registro)."""
+    records = extract_protocol_records(text or '')
+    if not records:
+        return None
+    return max(
+        records,
+        key=lambda item: (
+            str(item.get('sort_key') or ''),
+            str(item.get('registry_date') or ''),
+            str(item.get('document') or ''),
+        ),
+    )
+
+
 def extract_movement_records(text: str) -> list[dict[str, str]]:
     """
     Extrai registros da Lista de Andamentos do CADE/SEI.

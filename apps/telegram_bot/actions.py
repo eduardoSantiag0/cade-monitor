@@ -3,6 +3,7 @@ Execução das ações do bot que dependem do SEI (chamado pelo run_worker).
 
   - initial_watch: primeira leitura de um processo novo (baseline, sem alerta).
   - check: verificação sob demanda (/check).
+  - latest: última atualização com o documento mais recente (/ultima).
 
 Ações do mesmo processo são agrupadas: no máximo UMA consulta ao SEI por
 processo por tick, e todos os chats que pediram recebem a resposta.
@@ -18,11 +19,20 @@ import sentry_sdk
 from django.conf import settings
 from django.utils import timezone
 
-from apps.monitoring.clients import FetchError, lookup_process_url
+from apps.monitoring.clients import (
+    FetchError,
+    _looks_like_compressed,
+    download_document,
+    extract_document_links,
+    get_snapshot,
+    lookup_process_url,
+)
+from apps.monitoring.extractors import latest_protocol_record
+from apps.monitoring.models import DetectedDocument
 from apps.monitoring.services import run_check
 from apps.processes.models import MonitoredProcess, ProcessOrigin, ProcessStatus
 
-from . import messages, selectors
+from . import client, messages, selectors
 from .models import BotAction, BotActionKind, BotActionStatus
 from .services import recalculate_process_status, reply
 
@@ -59,6 +69,10 @@ def process_pending_bot_actions() -> int:
 def _run_for_process(actions: list[BotAction]) -> None:
     process = actions[0].process
     process.refresh_from_db()
+
+    latest = [a for a in actions if a.kind == BotActionKind.LATEST]
+    if latest:
+        _send_latest_update(process, latest)
 
     initial = [a for a in actions if a.kind == BotActionKind.INITIAL_WATCH]
     checks = [a for a in actions if a.kind == BotActionKind.CHECK]
@@ -110,6 +124,83 @@ def _run_for_process(actions: list[BotAction]) -> None:
             else messages.check_no_change(process.label, selectors.latest_records(process))
         )
         _finish(action, text)
+
+
+def _send_latest_update(process: MonitoredProcess, actions: list[BotAction]) -> None:
+    """Monta a última atualização uma vez e entrega texto + arquivo a cada chat."""
+    text, attachment = _build_latest_update(process)
+    for action in actions:
+        _finish(action, text)
+        if attachment and action.chat.is_reachable:
+            result = client.send_document_file(
+                action.chat.chat_id,
+                attachment['content'],
+                str(attachment.get('filename') or 'documento'),
+                str(attachment.get('content_type') or 'application/octet-stream'),
+            )
+            if not result.ok and result.is_blocked:
+                from .services import mark_chat_unreachable
+                mark_chat_unreachable(action.chat.chat_id)
+
+
+def _build_latest_update(process: MonitoredProcess) -> tuple[str, dict | None]:
+    """
+    Texto da última atualização + arquivo do protocolo mais recente (se der).
+    Usa o link já conhecido (DetectedDocument); só consulta a página do processo
+    quando o link do documento ainda não foi visto pelo monitor.
+    """
+    record = latest_protocol_record(process.last_text)
+    doc_url = ''
+    note = ''
+    attachment = None
+
+    if record and record.get('document'):
+        doc_url = (
+            DetectedDocument.objects
+            .filter(change__process=process, document_number=record['document'])
+            .exclude(url='')
+            .order_by('-created_at')
+            .values_list('url', flat=True)
+            .first()
+        ) or ''
+        if not doc_url:
+            try:
+                snapshot = get_snapshot(
+                    process.effective_url,
+                    timeout=settings.REQUEST_TIMEOUT_SECONDS,
+                    user_agent=settings.USER_AGENT,
+                )
+                doc_url = extract_document_links(snapshot.html, snapshot.url).get(record['document'], '')
+            except FetchError as exc:
+                logger.warning('[telegram] /ultima: página de #%d indisponível: %s', process.pk, exc)
+
+    if doc_url:
+        if _looks_like_compressed(record, doc_url):
+            note = 'Arquivo compactado: disponível só pelo link acima.'
+        else:
+            try:
+                attachment = download_document(
+                    url=doc_url,
+                    record={'document': record['document'], 'doc_type': record.get('doc_type', '')},
+                    timeout=settings.REQUEST_TIMEOUT_SECONDS,
+                    user_agent=settings.USER_AGENT,
+                    max_bytes=settings.TELEGRAM_ATTACHMENT_MAX_BYTES,
+                )
+                note = 'Documento em anexo logo abaixo.'
+            except FetchError as exc:
+                note = f'Não consegui baixar o documento agora ({exc}). Use o link acima.'
+    elif record:
+        note = 'Não encontrei o link público deste documento no SEI.'
+
+    text = messages.latest_update(
+        label=process.label,
+        process_url=process.effective_url,
+        record=record,
+        doc_url=doc_url,
+        change=selectors.last_change(process),
+        attachment_note=note,
+    )
+    return text, attachment
 
 
 def _started_text(process: MonitoredProcess) -> str:
