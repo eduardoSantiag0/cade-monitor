@@ -2,7 +2,7 @@
 Extração e normalização de texto de páginas HTML públicas do CADE/SEI.
 
 Este módulo é puramente funcional — sem efeitos colaterais, sem acesso ao banco.
-Portado e refatorado a partir de cademon/scraper.py.
+Portado e refatorado do antigo pacote `cademon` (removido; ver specs/002-repo-hardening-cleanup).
 
 Responsabilidades:
   - Parsear HTML e extrair texto visível (VisibleTextParser, LinkTextParser)

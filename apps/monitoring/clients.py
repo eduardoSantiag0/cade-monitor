@@ -7,7 +7,7 @@ Responsabilidades:
   - Baixar documentos públicos como anexos
   - Não conter regra de negócio do sistema
 
-Portado e refatorado a partir de cademon/scraper.py.
+Portado e refatorado do antigo pacote `cademon` (removido; ver specs/002-repo-hardening-cleanup).
 """
 from __future__ import annotations
 

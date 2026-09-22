@@ -18,6 +18,6 @@ choose_python() {
 
 PY=$(choose_python)
 
-if ! pgrep -u "$USER" -f "cademon worker" >/dev/null 2>&1; then
-  nohup "$PY" -m cademon worker >> logs/worker.log 2>&1 &
+if ! pgrep -u "$USER" -f "manage.py run_worker" >/dev/null 2>&1; then
+  nohup "$PY" manage.py run_worker >> logs/worker.log 2>&1 &
 fi

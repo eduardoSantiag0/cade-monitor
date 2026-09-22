@@ -19,8 +19,8 @@ choose_python() {
 PY=$(choose_python)
 PORT=${PORT:-8000}
 HOST=${HOST:-127.0.0.1}
-PATTERN="cademon serve .*--port $PORT"
+PATTERN="manage.py runserver .*$PORT"
 
 if ! pgrep -u "$USER" -f "$PATTERN" >/dev/null 2>&1; then
-  nohup "$PY" -m cademon serve --host "$HOST" --port "$PORT" >> logs/web.log 2>&1 &
+  nohup "$PY" manage.py runserver "$HOST:$PORT" >> logs/web.log 2>&1 &
 fi

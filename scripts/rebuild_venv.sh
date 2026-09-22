@@ -28,5 +28,4 @@ python -m pip install --upgrade pip >/dev/null 2>&1 || true
 if [ -s requirements.txt ]; then
   python -m pip install -r requirements.txt
 fi
-python -m cademon init
 python -V
