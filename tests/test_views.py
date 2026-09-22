@@ -5,7 +5,7 @@ Usa o Django test Client para verificar respostas HTTP sem mock de rede.
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from apps.monitoring.models import DetectedChange, CheckRun, DetectedDocument, PageSnapshot
@@ -316,6 +316,9 @@ class NotificationActionsViewTest(TestCase):
         )
 
 
+# EVOLUTION_ENABLED fixo: sem isto os testes herdavam o valor do .env local e
+# falhavam no CI (onde o padrão é false). O envio em si é sempre mockado.
+@override_settings(EVOLUTION_ENABLED=True)
 class ProcessNotificationActionViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')
