@@ -3,7 +3,7 @@
 **Acompanhe processos públicos do CADE pelo Telegram.** Mande o número do processo para o bot
 e receba um aviso, com o documento anexado, sempre que surgir uma movimentação nova no SEI.
 
-``Notas bore o acesso ao bot`` O nome de usuário do bot não é divulgado publicamente neste repositório para evitar exposição e uso não intencional da instância em produção. Caso queira testar ou conhecer o bot, entre em contato com o autor do projeto.   
+``Notas sobre  o acesso ao bot`` O nome de usuário do bot não é divulgado publicamente neste repositório para evitar exposição e uso não intencional da instância em produção. Caso queira testar ou conhecer o bot, entre em contato com o autor do projeto.   
 
 ```
 /watch 08700.005905/2026-38
@@ -89,6 +89,39 @@ Você                         CADE Monitor                                SEI/CA
   compactados, ou acima do limite, vão como link.
 - **Funciona em grupos.** Adicione o bot a um grupo da equipe: os alertas chegam para todos, e
   só administradores escolhem os processos.
+
+### Como a checagem de novidades é feita
+
+A cada ciclo, o `run_worker` pergunta a `apps/monitoring/scheduler.py::get_due_processes` quais
+processos ativos já passaram do intervalo mínimo (`max(CHECK_INTERVAL_SECONDS,
+check_interval_seconds do processo)` desde o último `last_checked_at`; nunca checados entram
+primeiro). Só os processos vencidos entram na fila do ciclo, até `MAX_PROCESSES_PER_CYCLE` por vez
+— isso é o que garante uma única consulta ao SEI por processo por ciclo, não importa quantos
+assinantes ele tenha.
+
+Para cada processo vencido, `apps/monitoring/services.py::run_check` faz:
+
+1. **Busca a página pública** (`clients.get_snapshot`), extrai o texto (sem tags HTML) e calcula um
+   hash SHA-256 do conteúdo.
+2. **Descarta páginas inválidas antes de comparar** — captcha, bloqueio, erro 5xx ou uma página bem
+   mais curta que a anterior são tratados como falha temporária de acesso, nunca como "o processo
+   mudou" (evita alerta falso quando o SEI está fora do ar ou bloqueou a consulta).
+3. **Compara o hash** com o último conhecido — primeiro num cache Redis opcional (mais rápido,
+   evita gravação no banco quando nada mudou), depois no `last_hash` salvo no PostgreSQL/SQLite.
+   Hash igual = nenhuma mudança, nenhum alerta, nenhum diff é calculado.
+4. **Primeira leitura de um processo novo** vira a linha de base (`last_hash`/`last_text`), sem
+   gerar alerta — é o que possibilita ao `/watch` responder "última atualização" sem soar como uma
+   "mudança".
+5. **Hash diferente = diff estruturado** (`apps/monitoring/diff.py`): em vez de comparar linha a
+   linha, a extração semântica (`extractors.py`) separa a "Lista de Andamentos" (movimentações) e a
+   "Lista de Protocolos" (documentos) da página antiga e da nova, e relata só os itens que são
+   **novos** de fato — nunca reordenações ou textos idênticos. Só cai para o diff genérico de
+   linhas se a página não tiver essa estrutura reconhecível do SEI.
+6. **Documentos novos** citados no diff são baixados como anexo quando há link público conhecido.
+   Arquivos compactados (zip/rar/7z) e documentos nativos do SEI (despacho, certidão, ata — que só
+   existem como página HTML, sem arquivo binário) não viram anexo: o alerta chega só com o link.
+7. Uma `DetectedChange` é criada e as notificações são agendadas para cada assinante do processo,
+   por canal (Telegram, e-mail, WhatsApp), respeitando pausa e modo silencioso.
 
 ---
 
