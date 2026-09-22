@@ -40,6 +40,8 @@ def _mask_password(url: str) -> str:
 
 def database_config_from_url(url: str, *, conn_max_age: int, sslmode: str) -> dict:
     """Converte uma URL postgresql:// no dict de DATABASES['default']."""
+    # Aspas coladas junto com a URL (comum em painéis de env vars) são toleradas.
+    url = url.strip().strip('"\'').strip()
     try:
         parts = urlsplit(url)
         port = parts.port
@@ -47,8 +49,13 @@ def database_config_from_url(url: str, *, conn_max_age: int, sslmode: str) -> di
         raise ImproperlyConfigured(f'DATABASE_URL inválida: {_mask_password(url)}') from exc
 
     if parts.scheme not in POSTGRES_SCHEMES:
+        # Mostra só o começo do valor (nunca a senha) para diagnosticar erros de colagem.
+        preview = url.split('@', 1)[0].split(':', 2)
+        preview = ':'.join(preview[:2]) + (':***' if len(preview) > 2 else '')
         raise ImproperlyConfigured(
-            f"DATABASE_URL com esquema {parts.scheme!r} não suportado; use postgresql://"
+            f"DATABASE_URL com esquema {parts.scheme!r} não suportado; use postgresql://. "
+            f"Valor recebido começa com {preview[:40]!r}. Confira se não ficou o placeholder, "
+            "aspas ou o prefixo 'DATABASE_URL=' dentro do valor."
         )
 
     name = unquote(parts.path.lstrip('/'))

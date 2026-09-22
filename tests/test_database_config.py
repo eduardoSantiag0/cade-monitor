@@ -57,6 +57,16 @@ class DatabaseConfigFromUrlTest(SimpleTestCase):
         with self.assertRaisesMessage(ImproperlyConfigured, "'mysql'"):
             self._parse('mysql://u:p@h/db')
 
+    def test_surrounding_quotes_are_tolerated(self):
+        self.assertEqual(self._parse('"postgresql://u:p@h/db"')['HOST'], 'h')
+
+    def test_pasted_mistakes_get_helpful_message_without_password(self):
+        for value in ('<Internal Database URL do Render>', 'DATABASE_URL=postgresql://u:Segredo9@h/db'):
+            with self.subTest(value=value), self.assertRaises(ImproperlyConfigured) as ctx:
+                self._parse(value)
+            self.assertIn('Valor recebido começa com', str(ctx.exception))
+            self.assertNotIn('Segredo9', str(ctx.exception))
+
     def test_missing_host_or_name(self):
         for url in ('postgresql://u:p@/db', 'postgresql://u:p@host', 'postgresql://u:p@host/'):
             with self.subTest(url=url), self.assertRaises(ImproperlyConfigured):
