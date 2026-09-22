@@ -1,5 +1,30 @@
 <!--
   SYNC IMPACT REPORT
+  Version change: 1.0.0 → 1.1.0
+
+  Modified principles:
+    - I. Simplicidade Operacional — adicionada exceção explícita permitindo Redis
+      como cache opcional de hash de processo (já implementado em código antes
+      desta emenda; a emenda documenta a realidade em vez de mudar o código).
+  Added sections: None
+  Removed sections: None
+  Rationale: Auditoria de código (spec 002-repo-hardening-cleanup) encontrou uso
+    de Redis (PROCESS_HASH_REDIS_*) em produção contradizendo o texto original
+    do Princípio I ("MUST NOT: ... cache distribuído (Redis, Memcached)"). Dono
+    do projeto decidiu manter o Redis (ganho de performance sob muitos
+    processos monitorados) e formalizar a exceção em vez de removê-lo.
+  Templates requiring updates:
+    ✅ .specify/memory/constitution.md — this file
+    ⚠ .specify/templates/plan-template.md — nenhuma mudança estrutural necessária;
+      novos planos que usem cache distribuído devem citar esta exceção no
+      Constitution Check em vez de tratá-la como violação.
+    ✅ .specify/templates/spec-template.md — sem mudanças necessárias
+    ✅ .specify/templates/tasks-template.md — sem mudanças necessárias
+  Deferred TODOs: None
+-->
+
+<!--
+  SYNC IMPACT REPORT (histórico)
   Version change: (unversioned template) → 1.0.0
   This is the initial ratification — all sections created from scratch.
 
@@ -27,8 +52,15 @@ CPU/memória em idle e sob carga típica (dezenas de processos monitorados).
 - MUST: Minimizar dependências de runtime; stdlib Python é preferida para scraping e utilitários.
 - MUST: Um único processo Gunicorn com 1 worker e 2 threads.
 - MUST: Worker contínuo implementado como management command (`run_worker`), sem daemons externos.
-- MUST NOT: Introduzir serviços de fila (Celery, RQ, Dramatiq) ou cache distribuído (Redis,
-  Memcached).
+- MUST NOT: Introduzir serviços de fila (Celery, RQ, Dramatiq).
+- MAY: Usar Redis exclusivamente como cache opcional de hash de processo
+  (`PROCESS_HASH_REDIS_*`), como otimização de performance sob muitos processos monitorados.
+  Esta é a única exceção de cache distribuído permitida nesta constituição.
+  - MUST: A aplicação MUST permanecer funcional com esse cache desabilitado
+    (`PROCESS_HASH_REDIS_ENABLED=false`), usando o hash já persistido em
+    `MonitoredProcess.last_hash` como fallback — Redis nunca é fonte única de verdade.
+  - MUST NOT: Usar Redis para qualquer outra finalidade (fila, sessão, cache de página,
+    pub/sub) sem nova emenda a este princípio.
 
 ### II. Monitoramento Responsável
 
@@ -153,4 +185,4 @@ de código, READMEs parciais e decisões verbais.
 **Compliance**: Todo plano de feature DEVE incluir uma seção "Constitution Check" verificando
 alinhamento com os Princípios I–VIII antes de iniciar implementação.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-07-07
+**Version**: 1.1.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-22
