@@ -12,3 +12,6 @@ whitenoise==6.12.0
 redis==8.1.0
 pydantic==2.13.5
 sentry-sdk==2.70.0
+# Driver PostgreSQL (banco principal em produção). Justificativa: constituição
+# v2.0.0, Princípio VIII — driver oficial do Django, sem alternativa em stdlib.
+psycopg[binary]==3.3.6

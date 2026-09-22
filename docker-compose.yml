@@ -38,7 +38,8 @@ services:
             - PROCESS_HASH_REDIS_ENABLED=${PROCESS_HASH_REDIS_ENABLED:-true}
             - PROCESS_HASH_REDIS_URL=${PROCESS_HASH_REDIS_URL_INTERNAL:-redis://evolution-redis:6379/1}
         volumes:
-            # SQLite e logs ficam fora da imagem — persistem entre deploys e rebuilds
+            # Logs (e o SQLite, quando DATABASE_URL não está definida) ficam fora da imagem.
+            # Em produção o banco é o PostgreSQL do Render (DATABASE_URL no .env).
             - ./data:/app/data
             - ./logs:/app/logs
         healthcheck:
@@ -151,3 +152,29 @@ services:
             timeout: 5s
             retries: 6
             start_period: 5s
+
+    # ---- PostgreSQL local opcional (dev/testes da feature 005) ----
+    # Produção usa o PostgreSQL gerenciado no Render via DATABASE_URL.
+    # Uso: docker compose --profile pg up -d postgres
+    #      DATABASE_URL=postgresql://cade:cade@localhost:5432/cade?sslmode=disable
+    postgres:
+        image: postgres:18-alpine
+        profiles: ["pg"]
+        restart: unless-stopped
+        ports:
+            - "5432:5432"
+        environment:
+            - POSTGRES_DB=cade
+            - POSTGRES_USER=cade
+            - POSTGRES_PASSWORD=cade
+        volumes:
+            - cade-postgres:/var/lib/postgresql
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U cade -d cade"]
+            interval: 10s
+            timeout: 5s
+            retries: 6
+            start_period: 10s
+
+volumes:
+    cade-postgres:

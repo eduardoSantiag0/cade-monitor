@@ -3,6 +3,7 @@ Models do app processes.
 Representa o domínio principal: o processo público monitorado.
 """
 from django.db import models
+from django.db.models import F
 from django.utils.translation import gettext_lazy as _
 
 
@@ -63,7 +64,8 @@ class MonitoredProcess(models.Model):
     class Meta:
         verbose_name = _('processo monitorado')
         verbose_name_plural = _('processos monitorados')
-        ordering = ['-last_changed_at', '-updated_at']
+        # nulls_last explícito: no Postgres NULL vem primeiro em DESC (no SQLite, por último).
+        ordering = [F('last_changed_at').desc(nulls_last=True), '-updated_at']
         indexes = [
             models.Index(fields=['status', 'last_checked_at']),
         ]

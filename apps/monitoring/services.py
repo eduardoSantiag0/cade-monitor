@@ -253,7 +253,8 @@ def _persist_detected_documents(change: DetectedChange, document_results: list[d
         return
 
     for item in document_results:
-        doc_number = str(item.get('document') or '').strip()
+        # [:120] = max_length do campo; o Postgres rejeita valores maiores.
+        doc_number = str(item.get('document') or '').strip()[:120]
         if not doc_number:
             continue
 

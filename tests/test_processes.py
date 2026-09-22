@@ -53,3 +53,13 @@ class ProcessSelectorsTest(TestCase):
         active = get_active_processes()
         self.assertEqual(active.count(), 1)
         self.assertEqual(active.first().label, 'A')
+
+    def test_processes_without_change_are_listed_last(self):
+        from django.utils import timezone
+
+        changed = MonitoredProcess.objects.create(
+            label='Mudou', source='https://d.com', last_changed_at=timezone.now(),
+        )
+        labels = [p.label for p in get_all_processes()]
+        self.assertEqual(labels[0], changed.label)
+        self.assertEqual([p.label for p in MonitoredProcess.objects.all()][0], changed.label)

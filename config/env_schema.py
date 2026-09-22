@@ -30,6 +30,10 @@ class EnvSettings(BaseModel):
     allowed_hosts: list[str] = ['localhost', '127.0.0.1']
 
     # Banco de dados
+    # database_url ausente (None) → SQLite; presente → PostgreSQL (ver config/database.py).
+    database_url: str | None = None
+    db_sslmode: str = 'require'
+    db_conn_max_age: int = 60
     sqlite_path: str = ''
 
     # Internacionalização
@@ -94,6 +98,34 @@ class EnvSettings(BaseModel):
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip('/')
 
+    @field_validator('database_url', mode='after')
+    @classmethod
+    def _reject_empty_database_url(cls, value: str | None) -> str | None:
+        # Variável definida mas vazia quase sempre é erro de deploy: cair em
+        # silêncio no SQLite gravaria produção num arquivo efêmero do container.
+        if value is not None and not value.strip():
+            raise ValueError(
+                'DATABASE_URL está definida mas vazia. Remova a variável para usar SQLite '
+                'ou informe uma URL postgresql://...'
+            )
+        return value.strip() if value is not None else None
+
+    @field_validator('db_sslmode', mode='after')
+    @classmethod
+    def _validate_sslmode(cls, value: str) -> str:
+        allowed = {'disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'}
+        value = value.strip().lower()
+        if value not in allowed:
+            raise ValueError(f'DB_SSLMODE inválido: {value!r}. Use um de: {", ".join(sorted(allowed))}')
+        return value
+
+    @field_validator('db_conn_max_age', mode='after')
+    @classmethod
+    def _non_negative_conn_max_age(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError('DB_CONN_MAX_AGE deve ser >= 0.')
+        return value
+
     @field_validator('check_interval_seconds', mode='after')
     @classmethod
     def _enforce_minimum_interval(cls, value: int) -> int:
@@ -135,6 +167,10 @@ class EnvSettings(BaseModel):
         _set('secret_key', 'SECRET_KEY', cls.model_fields['secret_key'].default)
         _set('debug', 'DEBUG', cls.model_fields['debug'].default)
         _set('allowed_hosts', 'ALLOWED_HOSTS', 'localhost,127.0.0.1')
+        if 'DATABASE_URL' in env:
+            raw['database_url'] = env['DATABASE_URL']
+        _set('db_sslmode', 'DB_SSLMODE', cls.model_fields['db_sslmode'].default)
+        _set('db_conn_max_age', 'DB_CONN_MAX_AGE', cls.model_fields['db_conn_max_age'].default)
         _set('sqlite_path', 'SQLITE_PATH', default_sqlite_path)
         _set('app_timezone', 'APP_TIMEZONE', cls.model_fields['app_timezone'].default)
         _set('smtp_enabled', 'SMTP_ENABLED', cls.model_fields['smtp_enabled'].default)

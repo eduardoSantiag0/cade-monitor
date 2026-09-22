@@ -5,7 +5,7 @@ Não têm efeitos colaterais.
 """
 from __future__ import annotations
 
-from django.db.models import Count, QuerySet
+from django.db.models import Count, F, QuerySet
 from django.utils import timezone
 
 from .models import MonitoredProcess, ProcessStatus
@@ -19,7 +19,7 @@ def get_all_processes() -> QuerySet:
             subscriber_count=Count('subscriptions', distinct=True),
             change_count=Count('changes', distinct=True),
         )
-        .order_by('-last_changed_at', '-updated_at')
+        .order_by(F('last_changed_at').desc(nulls_last=True), '-updated_at')
     )
 
 

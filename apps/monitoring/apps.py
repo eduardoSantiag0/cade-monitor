@@ -4,6 +4,9 @@ AppConfig do app monitoring.
 O método ready() conecta o signal connection_created para ativar WAL mode
 e outros PRAGMAs de desempenho no SQLite a cada nova conexão.
 
+Produção usa PostgreSQL (DATABASE_URL); o SQLite só existe em dev/testes.
+O handler checa connection.vendor, então é no-op no Postgres.
+
 Por que aqui e não no settings.py:
   - AppConfig.ready() é o ponto correto do Django para código de inicialização.
   - Garante que o signal seja registrado depois que todos os apps estão carregados.

@@ -305,3 +305,55 @@ class RedisCacheFallbackTest(TestCase):
         self.assertEqual(DetectedChange.objects.filter(process=self.process).count(), 1)
         self.process.refresh_from_db()
         self.assertEqual(self.process.last_hash, 'hash_novo_sem_redis')
+
+
+class PostgresPortabilityTest(TestCase):
+    """Comportamentos que diferem entre SQLite e Postgres (spec 005, research R8)."""
+
+    def test_never_checked_processes_come_first(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.monitoring.scheduler import get_due_processes
+
+        old = MonitoredProcess.objects.create(
+            label='Antigo', source='https://a.example', status=ProcessStatus.ACTIVE,
+            last_checked_at=timezone.now() - timedelta(days=2),
+        )
+        never = MonitoredProcess.objects.create(
+            label='Nunca', source='https://b.example', status=ProcessStatus.ACTIVE,
+        )
+        self.assertEqual([p.pk for p in get_due_processes()], [never.pk, old.pk])
+        self.assertEqual([p.pk for p in get_due_processes(limit=1)], [never.pk])
+
+    def test_long_document_number_is_truncated(self):
+        from apps.monitoring.models import DetectedChange, DetectedDocument, PageSnapshot
+        from apps.monitoring.services import _persist_detected_documents
+
+        process = MonitoredProcess.objects.create(label='P', source='https://p.example')
+        snapshot = PageSnapshot.objects.create(process=process, content_hash='h', text_content='t')
+        change = DetectedChange.objects.create(
+            process=process, new_snapshot=snapshot, new_hash='h', summary='s', diff_text='d',
+        )
+        _persist_detected_documents(change, [{'document': '9' * 300, 'title': 'Nota'}])
+        self.assertEqual(len(DetectedDocument.objects.get(change=change).document_number), 120)
+
+
+class RunWorkerConnectionTest(TestCase):
+    @patch('apps.monitoring.scheduler.get_due_processes', return_value=[])
+    @patch('apps.monitoring.management.commands.run_worker.close_old_connections')
+    def test_cycle_recycles_db_connections(self, mock_close, _mock_due):
+        from django.core.management import call_command
+
+        call_command('run_worker', '--once', stdout=MagicMock())
+        mock_close.assert_called()
+
+    @patch('apps.monitoring.scheduler.get_due_processes', side_effect=RuntimeError('db caiu'))
+    @patch('apps.monitoring.management.commands.run_worker.close_old_connections')
+    def test_failed_cycle_drops_connection_for_next_cycle(self, mock_close, _mock_due):
+        from django.core.management import call_command
+
+        call_command('run_worker', '--once', stdout=MagicMock())
+        # uma no início do ciclo + uma no tratamento do erro
+        self.assertEqual(mock_close.call_count, 2)

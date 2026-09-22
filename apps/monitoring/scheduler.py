@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import F
 from django.utils import timezone
 
 from apps.processes.models import MonitoredProcess, ProcessStatus
@@ -20,11 +21,12 @@ def get_due_processes(limit: int | None = None) -> list[MonitoredProcess]:
     """
     now = timezone.now()
     # Ordena pelo último check para dar prioridade aos mais antigos.
+    # nulls_first explícito: no Postgres NULL vem por último em ASC (no SQLite, primeiro).
     # O limit * 3 é uma heurística para pegar mais candidatos antes de filtrar.
     candidates = (
         MonitoredProcess.objects
         .filter(status=ProcessStatus.ACTIVE)
-        .order_by('last_checked_at')
+        .order_by(F('last_checked_at').asc(nulls_first=True))
     )
     if limit:
         candidates = candidates[: limit * 3]

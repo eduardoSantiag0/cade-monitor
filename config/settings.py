@@ -8,6 +8,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .database import build_databases
 from .env_schema import EnvSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,21 +79,12 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ---------------------------------------------------------------------------
-# Banco de dados — SQLite com WAL mode (ativado via signal em monitoring/apps.py)
+# Banco de dados — PostgreSQL via DATABASE_URL (produção); sem ela, SQLite com
+# WAL mode para dev/testes (PRAGMAs via signal em monitoring/apps.py).
 # ---------------------------------------------------------------------------
 SQLITE_PATH = env.sqlite_path
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': SQLITE_PATH,
-        'OPTIONS': {
-            # Espera até 20s por um lock antes de lançar OperationalError.
-            # Importante para coexistência do worker com o Gunicorn.
-            'timeout': 20,
-        },
-    }
-}
+DATABASES = build_databases(env)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

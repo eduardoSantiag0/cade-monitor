@@ -19,7 +19,8 @@ arquiteturais do projeto ficam documentados em `.specify/memory/constitution.md`
 | Camada    | Tecnologia                     |
 | --------- | ------------------------------ |
 | Backend   | Django 5.x                     |
-| Banco     | SQLite (WAL mode)              |
+| Banco     | PostgreSQL 18 (Render) — produção |
+| Banco dev | SQLite (WAL mode) — dev/testes |
 | Interface | Django templates + CSS próprio |
 | Admin     | Django Admin                   |
 | Worker    | `management command` em loop   |
@@ -106,7 +107,8 @@ python manage.py generate_daily_digest --hours 48 --dry-run
 python manage.py cleanup_snapshots
 python manage.py cleanup_snapshots --keep 50 --dry-run
 
-# Backup do SQLite
+# Backup (SQLite: cópia do arquivo; PostgreSQL: pg_dump se disponível,
+# senão avisa que o backup é gerenciado pelo Render)
 python manage.py backup_db --dest backups --keep 7
 ```
 
@@ -172,8 +174,45 @@ Veja `.env.example` para a lista completa com comentários. Variáveis obrigató
 | --------------- | -----------------------------------------------------------------------------------------|
 | `SECRET_KEY`    | Chave Django — gere com `python -c "import secrets; print(secrets.token_urlsafe(50))"`. Obrigatória e validada: a aplicação recusa iniciar com `DEBUG=false` sem uma chave própria. |
 | `ALLOWED_HOSTS` | Domínios permitidos, separados por vírgula                                             |
-| `SQLITE_PATH`   | Caminho do banco SQLite (use volume Docker persistente)                                |
+| `DATABASE_URL`  | URL do PostgreSQL (`postgresql://user:senha@host:5432/db`). Se ausente, usa SQLite. Definida mas vazia = erro. Veja [Banco de dados](#banco-de-dados-postgresql). |
+| `SQLITE_PATH`   | Caminho do banco SQLite — usado só sem `DATABASE_URL` (dev/testes)                     |
 | `DEBUG`         | `false` em produção                                                                    |
+
+### Banco de dados (PostgreSQL)
+
+Produção usa **PostgreSQL 18 gerenciado no Render**, configurado apenas por `DATABASE_URL`
+(nunca versione a URL real — ela contém a senha).
+
+- **Serviços dentro do Render** (web, worker): use a *Internal Database URL*.
+- **Acesso de fora** (sua máquina, migração de dados): use a *External Database URL*
+  (`*.render.com`), sempre com TLS.
+- `DB_SSLMODE` (padrão `require`) e `DB_CONN_MAX_AGE` (padrão `60`) ajustam TLS e conexões
+  persistentes; `?sslmode=` na URL tem precedência.
+- Sem `DATABASE_URL` a aplicação usa o SQLite local — é o modo de dev e da suíte de testes.
+- Postgres local para testes: `docker compose --profile pg up -d postgres` e
+  `DATABASE_URL=postgresql://cade:cade@localhost:5432/cade?sslmode=disable`.
+  (Não rode a suíte contra o banco do Render.)
+
+#### Migrar de SQLite para PostgreSQL
+
+Com o worker **parado**:
+
+```bash
+# 1. exportar do SQLite (sem DATABASE_URL no ambiente)
+python manage.py dumpdata --natural-foreign   --exclude contenttypes --exclude auth.permission   --exclude admin.logentry --exclude sessions   -o data/migration.json
+
+# 2. importar no Postgres (External URL, com DATABASE_URL definida)
+python manage.py migrate
+python manage.py loaddata data/migration.json
+
+# 3. reajustar as sequences para os próximos IDs não colidirem
+python manage.py sqlsequencereset processes subscribers monitoring notifications auth   | python manage.py dbshell
+```
+
+Compare as contagens por model nos dois bancos (veja
+`specs/005-postgres-render/quickstart.md`) e **apague `data/migration.json`** — ele contém
+dados de assinantes. Como `last_hash` é migrado, o próximo ciclo do worker não gera alertas de
+"primeira leitura".
 
 ### E-mail (SMTP)
 
@@ -227,5 +266,5 @@ python manage.py test tests --verbosity=2
 - Respeite intervalos de checagem responsáveis (mínimo de 25 minutos por processo, ver
   `.specify/memory/constitution.md`) — o sistema consulta páginas públicas de terceiros.
 - Valide a página oficial antes de tratar qualquer alerta como prova processual.
-- Monitore `logs/cade-monitor.log` e faça backup regular do banco SQLite
-  (`python manage.py backup_db`).
+- Monitore `logs/cade-monitor.log`. Em produção o backup do PostgreSQL é gerenciado pelo Render;
+  em dev, `python manage.py backup_db` copia o SQLite.

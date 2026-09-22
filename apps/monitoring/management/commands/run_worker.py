@@ -20,6 +20,7 @@ import time
 import sentry_sdk
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db import close_old_connections
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ class Command(BaseCommand):
             except Exception as exc:
                 logger.error('[worker] Erro inesperado no ciclo: %s', exc, exc_info=True)
                 sentry_sdk.capture_exception(exc)
+                # Descarta conexão quebrada (ex.: Postgres caiu) para reconectar no próximo ciclo.
+                close_old_connections()
 
             if once:
                 break
@@ -69,6 +72,10 @@ class Command(BaseCommand):
         from apps.monitoring.scheduler import get_due_processes
         from apps.monitoring.services import run_check
         from apps.notifications.services import send_pending_notifications
+
+        # Fora do ciclo request/response ninguém recicla conexões: aplica aqui as
+        # regras de CONN_MAX_AGE/CONN_HEALTH_CHECKS (conexões encerradas pelo provedor).
+        close_old_connections()
 
         due = get_due_processes(settings.MAX_PROCESSES_PER_CYCLE)
         if not due:
