@@ -78,6 +78,10 @@ class EnvSettings(BaseModel):
     # Logging
     log_level: str = 'INFO'
 
+    # Rastreamento de erros (Sentry ou compatível) — opcional
+    sentry_dsn: str = ''
+    sentry_environment: str = 'production'
+
     @field_validator('allowed_hosts', mode='before')
     @classmethod
     def _split_allowed_hosts(cls, value: object) -> object:
@@ -216,5 +220,7 @@ class EnvSettings(BaseModel):
             cls.model_fields['min_valid_page_size_ratio'].default,
         )
         _set('log_level', 'LOG_LEVEL', cls.model_fields['log_level'].default)
+        _set('sentry_dsn', 'SENTRY_DSN', cls.model_fields['sentry_dsn'].default)
+        _set('sentry_environment', 'SENTRY_ENVIRONMENT', cls.model_fields['sentry_environment'].default)
 
         return cls(**raw)

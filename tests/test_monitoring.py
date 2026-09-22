@@ -231,3 +231,77 @@ class CheckRunServiceTest(TestCase):
         self.assertEqual(DetectedChange.objects.filter(process=self.process).count(), 0)
         self.process.refresh_from_db()
         self.assertEqual(self.process.last_hash, 'hash_antigo_xpto')
+
+
+class RedisCacheFallbackTest(TestCase):
+    """
+    A Constituição do projeto (v1.1.0) permite Redis como cache opcional de
+    hash de processo, sob a condição de que a aplicação continue funcional
+    com o cache desabilitado. Estes testes provam essa condição diretamente
+    em run_check, sem depender de um servidor Redis disponível
+    (spec 002-repo-hardening-cleanup, FR-011).
+    """
+
+    def setUp(self):
+        self.process = MonitoredProcess.objects.create(
+            label='Processo sem Redis',
+            source='https://sei.cade.gov.br/test-no-redis',
+            status=ProcessStatus.ACTIVE,
+        )
+
+    @patch('apps.monitoring.services.get_snapshot')
+    def test_no_change_detected_via_database_hash_without_redis(self, mock_get_snapshot):
+        from apps.monitoring.clients import Snapshot
+        from apps.monitoring.models import CheckRun
+        from apps.monitoring.services import run_check
+
+        self.process.last_hash = 'hash_estavel_sem_redis'
+        self.process.last_text = 'Conteúdo estável'
+        self.process.save()
+
+        mock_get_snapshot.return_value = Snapshot(
+            url='https://sei.cade.gov.br/test-no-redis',
+            status_code=200,
+            title='Test',
+            text='Conteúdo estável',
+            content_hash='hash_estavel_sem_redis',
+            fetched_at='2026-09-22T10:00:00+00:00',
+            content_length=200,
+        )
+
+        with self.settings(PROCESS_HASH_REDIS_ENABLED=False):
+            result = run_check(self.process)
+
+        self.assertTrue(result['ok'])
+        self.assertFalse(result['changed'])
+        # Sem Redis, a decisão de "sem mudança" só pode ter vindo do hash no banco.
+        self.assertEqual(CheckRun.objects.filter(process=self.process).count(), 0)
+
+    @patch('apps.monitoring.services.get_snapshot')
+    def test_change_detected_via_database_hash_without_redis(self, mock_get_snapshot):
+        from apps.monitoring.clients import Snapshot
+        from apps.monitoring.models import DetectedChange
+        from apps.monitoring.services import run_check
+
+        self.process.last_hash = 'hash_anterior_sem_redis'
+        self.process.last_text = 'Conteúdo anterior'
+        self.process.save()
+
+        mock_get_snapshot.return_value = Snapshot(
+            url='https://sei.cade.gov.br/test-no-redis',
+            status_code=200,
+            title='Test',
+            text='Conteúdo novo detectado sem cache',
+            content_hash='hash_novo_sem_redis',
+            fetched_at='2026-09-22T10:00:00+00:00',
+            content_length=300,
+        )
+
+        with self.settings(PROCESS_HASH_REDIS_ENABLED=False):
+            result = run_check(self.process)
+
+        self.assertTrue(result['ok'])
+        self.assertTrue(result['changed'])
+        self.assertEqual(DetectedChange.objects.filter(process=self.process).count(), 1)
+        self.process.refresh_from_db()
+        self.assertEqual(self.process.last_hash, 'hash_novo_sem_redis')

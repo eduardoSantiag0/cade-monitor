@@ -17,6 +17,7 @@ import logging
 import signal
 import time
 
+import sentry_sdk
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
@@ -47,6 +48,7 @@ class Command(BaseCommand):
                 self._run_cycle()
             except Exception as exc:
                 logger.error('[worker] Erro inesperado no ciclo: %s', exc, exc_info=True)
+                sentry_sdk.capture_exception(exc)
 
             if once:
                 break
@@ -89,6 +91,7 @@ class Command(BaseCommand):
                     )
             except Exception as exc:
                 logger.error('[worker] Erro ao checar #%d: %s', process.pk, exc, exc_info=True)
+                sentry_sdk.capture_exception(exc)
 
             sleep = settings.SLEEP_BETWEEN_REQUESTS_SECONDS
             if sleep > 0 and self._running:
@@ -101,3 +104,4 @@ class Command(BaseCommand):
                 logger.info('[worker] Notificações: %s', stats)
         except Exception as exc:
             logger.error('[worker] Erro ao enviar notificações: %s', exc, exc_info=True)
+            sentry_sdk.capture_exception(exc)

@@ -241,3 +241,12 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+# ---------------------------------------------------------------------------
+# Rastreamento de erros (Sentry ou compatível) — opcional, ativado por SENTRY_DSN
+# ---------------------------------------------------------------------------
+from .sentry import init_sentry  # noqa: E402
+
+SENTRY_DSN = env.sentry_dsn
+SENTRY_ENVIRONMENT = env.sentry_environment
+init_sentry(SENTRY_DSN, SENTRY_ENVIRONMENT)
