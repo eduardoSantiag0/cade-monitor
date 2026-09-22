@@ -14,6 +14,11 @@ class ProcessStatus(models.TextChoices):
     ARCHIVED = 'archived', _('Arquivado')
 
 
+class ProcessOrigin(models.TextChoices):
+    PANEL = 'panel', _('Painel')
+    TELEGRAM = 'telegram', _('Bot do Telegram')
+
+
 class MonitoredProcess(models.Model):
     """
     Representa uma página pública monitorada — geralmente um processo do CADE/SEI.
@@ -58,6 +63,13 @@ class MonitoredProcess(models.Model):
     last_changed_at = models.DateTimeField(_('última mudança'), null=True, blank=True)
     last_error = models.TextField(_('último erro'), blank=True)
     notes = models.TextField(_('observações internas'), blank=True)
+    origin = models.CharField(
+        _('origem'),
+        max_length=20,
+        choices=ProcessOrigin.choices,
+        default=ProcessOrigin.PANEL,
+        help_text=_('O bot do Telegram só pausa/reativa automaticamente processos criados por ele.'),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -7,16 +7,25 @@ onde N é definido por MAX_SNAPSHOTS_PER_PROCESS no .env.
 Snapshots vinculados a DetectedChange não são removidos pelo CASCADE normal,
 mas isso é aceitável — a mudança mantém o contexto histórico.
 
+Também remove registros operacionais do bot do Telegram com mais de
+BOT_RECORDS_RETENTION_DAYS dias (update_ids processados e ações finalizadas).
+
 Uso:
     python manage.py cleanup_snapshots
     python manage.py cleanup_snapshots --keep 50
     python manage.py cleanup_snapshots --dry-run
 """
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from apps.monitoring.models import PageSnapshot
 from apps.processes.models import MonitoredProcess
+from apps.telegram_bot.models import BotAction, BotActionStatus, TelegramUpdate
+
+BOT_RECORDS_RETENTION_DAYS = 30
 
 
 class Command(BaseCommand):
@@ -58,6 +67,17 @@ class Command(BaseCommand):
             else:
                 deleted, _ = to_delete.delete()
                 total_deleted += deleted
+
+        cutoff = timezone.now() - timedelta(days=BOT_RECORDS_RETENTION_DAYS)
+        old_updates = TelegramUpdate.objects.filter(received_at__lt=cutoff)
+        old_actions = BotAction.objects.exclude(status=BotActionStatus.PENDING).filter(finished_at__lt=cutoff)
+        if dry_run:
+            self.stdout.write(
+                f'  [telegram] removeria {old_updates.count()} update(s) e {old_actions.count()} ação(ões).'
+            )
+        else:
+            old_updates.delete()
+            old_actions.delete()
 
         if dry_run:
             self.stdout.write(self.style.WARNING('Dry-run: nenhuma alteração realizada.'))

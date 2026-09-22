@@ -127,14 +127,23 @@ def resolve_process_url(process_number: str, timeout: int, user_agent: str) -> s
     Retorna None se não encontrar (processo não público ou número inválido).
     """
     try:
-        raw, _, charset = _open_request(
-            _build_search_request(process_number.strip(), user_agent),
-            timeout,
-        )
-        html = raw.decode(charset, errors='replace')
-        return extract_process_detail_url(html)
+        return lookup_process_url(process_number, timeout, user_agent)
     except FetchError:
         return None
+
+
+def lookup_process_url(process_number: str, timeout: int, user_agent: str) -> str | None:
+    """
+    Como resolve_process_url, mas distingue os casos:
+      - FetchError propagado → falha de rede/HTTP (vale tentar de novo);
+      - None → a pesquisa respondeu, mas o processo não existe ou não é público.
+    """
+    raw, _, charset = _open_request(
+        _build_search_request(process_number.strip(), user_agent),
+        timeout,
+    )
+    html = raw.decode(charset, errors='replace')
+    return extract_process_detail_url(html)
 
 
 # ---------------------------------------------------------------------------

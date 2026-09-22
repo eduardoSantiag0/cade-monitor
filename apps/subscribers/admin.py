@@ -16,8 +16,10 @@ class SubscriberAdmin(admin.ModelAdmin):
 
 @admin.register(ProcessSubscription)
 class ProcessSubscriptionAdmin(admin.ModelAdmin):
-    list_display = ['subscriber', 'process', 'email_enabled', 'whatsapp_enabled', 'created_at']
-    list_filter = ['email_enabled', 'whatsapp_enabled']
+    list_display = [
+        'subscriber', 'process', 'email_enabled', 'whatsapp_enabled', 'telegram_enabled', 'paused', 'created_at',
+    ]
+    list_filter = ['email_enabled', 'whatsapp_enabled', 'telegram_enabled', 'paused']
     search_fields = ['subscriber__name', 'process__label']
     autocomplete_fields = ['subscriber', 'process']
     readonly_fields = ['created_at']

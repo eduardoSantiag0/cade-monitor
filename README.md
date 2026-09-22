@@ -25,7 +25,8 @@ arquiteturais do projeto ficam documentados em `.specify/memory/constitution.md`
 | Admin     | Django Admin                   |
 | Worker    | `management command` em loop   |
 | WSGI      | Gunicorn                       |
-| WhatsApp  | Evolution API                  |
+| Telegram  | Bot API (webhook) — canal principal |
+| WhatsApp  | Evolution API (opcional)       |
 | E-mail    | SMTP via `django.core.mail`    |
 | Container | Docker + Docker Compose        |
 
@@ -122,7 +123,8 @@ apps/
   processes/     ← MonitoredProcess, ProcessTag
   monitoring/    ← CheckRun, PageSnapshot, DetectedChange, scraping, diff
   subscribers/   ← Subscriber, ProcessSubscription
-  notifications/ ← Notification, canais email/evolution
+  notifications/ ← Notification, canais email/evolution/telegram
+  telegram_bot/  ← bot do Telegram: webhook, comandos, ações do worker
   dashboard/     ← views do painel
 templates/       ← HTML templates Django
 static/css/      ← CSS próprio
@@ -228,6 +230,50 @@ SMTP_TLS=true
 
 Sem SMTP habilitado, o backend de console do Django é usado em desenvolvimento — o e-mail aparece
 no terminal em vez de ser enviado de verdade.
+
+### Bot do Telegram (canal principal)
+
+Qualquer pessoa (ou grupo) pode acompanhar processos sozinha, pelo Telegram, e receber alertas
+de movimentação. O WhatsApp e o e-mail continuam disponíveis para assinantes do painel.
+
+**Configurar**
+
+1. Crie o bot no [@BotFather](https://t.me/BotFather) (`/newbot`) e guarde o token.
+2. Configure, nos serviços web **e** worker:
+   ```
+   TELEGRAM_ENABLED=true
+   TELEGRAM_BOT_TOKEN=<token>
+   TELEGRAM_WEBHOOK_SECRET=<python -c "import secrets; print(secrets.token_urlsafe(32))">
+   BASE_URL=https://<seu-app>.onrender.com
+   ```
+3. Depois do deploy: `python manage.py migrate` e `python manage.py telegram_webhook`
+   (confira com `--info`; remova com `--delete`).
+
+**Comandos**
+
+| Comando | O que faz |
+|---|---|
+| `/start`, `/help` | apresentação e ajuda |
+| `/watch <processo>` | começa a monitorar (ex.: `/watch 08700.005905/2026-38`, também aceita o link do SEI) |
+| `/unwatch <processo>` | para de monitorar |
+| `/list` | processos acompanhados |
+| `/status <processo>` | última movimentação conhecida |
+| `/check <processo>` | verifica agora (respeita `TELEGRAM_CHECK_COOLDOWN_SECONDS`) |
+| `/pause`, `/resume <processo>` | pausa/retoma os alertas só para quem pediu |
+| `/history <processo>` | últimas movimentações |
+
+**Como funciona**
+
+- O webhook (`/telegram/webhook/`) só aceita chamadas com o secret, processa cada update uma
+  vez e **nunca consulta o SEI**. A primeira leitura do `/watch` e o `/check` viram ações
+  executadas pelo `run_worker` (uma consulta por processo por ciclo).
+- Cada conversa vira um assinante. Os alertas usam o mesmo fluxo de notificações, tentativas e
+  anexos dos outros canais.
+- **Grupos:** adicione o bot ao grupo. Só administradores usam `/watch`, `/unwatch`, `/pause`
+  e `/resume`. Qualquer membro pode usar `/list`, `/status`, `/history` e `/check`.
+- Limite de `TELEGRAM_MAX_PROCESSES_PER_CHAT` processos por conversa (padrão 10).
+- Processos criados pelo bot são pausados automaticamente quando ninguém mais os acompanha.
+  Processos cadastrados pelo painel nunca têm o status alterado pelo bot.
 
 ### WhatsApp (Evolution API)
 

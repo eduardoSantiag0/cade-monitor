@@ -13,6 +13,7 @@ Não substitui o .env/os.environ — apenas valida o que já é lido de lá.
 from __future__ import annotations
 
 import os
+import re
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -56,6 +57,17 @@ class EnvSettings(BaseModel):
     evolution_api_key: str = ''
     evolution_instance_name: str = 'cade-monitor'
     evolution_timeout_seconds: int = 15
+
+    # Telegram (canal principal — spec 006)
+    base_url: str = ''
+    telegram_enabled: bool = False
+    telegram_bot_token: str = ''
+    telegram_webhook_secret: str = ''
+    telegram_bot_username: str = ''
+    telegram_max_processes_per_chat: int = 10
+    telegram_check_cooldown_seconds: int = 300
+    telegram_history_limit: int = 5
+    telegram_timeout_seconds: int = 10
 
     # Monitoramento
     check_interval_seconds: int = 1500
@@ -126,6 +138,39 @@ class EnvSettings(BaseModel):
             raise ValueError('DB_CONN_MAX_AGE deve ser >= 0.')
         return value
 
+    @field_validator('base_url', mode='after')
+    @classmethod
+    def _strip_base_url_slash(cls, value: str) -> str:
+        return value.strip().rstrip('/')
+
+    @field_validator('telegram_bot_username', mode='after')
+    @classmethod
+    def _strip_at(cls, value: str) -> str:
+        return value.strip().lstrip('@')
+
+    @field_validator('telegram_max_processes_per_chat', 'telegram_history_limit', mode='after')
+    @classmethod
+    def _at_least_one(cls, value: int) -> int:
+        return max(1, value)
+
+    @field_validator('telegram_check_cooldown_seconds', mode='after')
+    @classmethod
+    def _cooldown_minimum(cls, value: int) -> int:
+        return max(60, value)
+
+    @model_validator(mode='after')
+    def _require_telegram_credentials_when_enabled(self) -> 'EnvSettings':
+        if not self.telegram_enabled:
+            return self
+        if not self.telegram_bot_token:
+            raise ValueError('TELEGRAM_ENABLED=true exige TELEGRAM_BOT_TOKEN (gerado no @BotFather).')
+        if not re.fullmatch(r'[A-Za-z0-9_-]{16,256}', self.telegram_webhook_secret or ''):
+            raise ValueError(
+                'TELEGRAM_ENABLED=true exige TELEGRAM_WEBHOOK_SECRET com 16 a 256 caracteres '
+                '[A-Za-z0-9_-] (gere com: python -c "import secrets; print(secrets.token_urlsafe(32))").'
+            )
+        return self
+
     @field_validator('check_interval_seconds', mode='after')
     @classmethod
     def _enforce_minimum_interval(cls, value: int) -> int:
@@ -191,6 +236,13 @@ class EnvSettings(BaseModel):
         )
         _set('evolution_instance_name', 'EVOLUTION_INSTANCE_NAME', cls.model_fields['evolution_instance_name'].default)
         _set('evolution_timeout_seconds', 'EVOLUTION_TIMEOUT_SECONDS', cls.model_fields['evolution_timeout_seconds'].default)
+        _set('base_url', 'BASE_URL', cls.model_fields['base_url'].default)
+        for field in (
+            'telegram_enabled', 'telegram_bot_token', 'telegram_webhook_secret',
+            'telegram_bot_username', 'telegram_max_processes_per_chat',
+            'telegram_check_cooldown_seconds', 'telegram_history_limit', 'telegram_timeout_seconds',
+        ):
+            _set(field, field.upper(), cls.model_fields[field].default)
         _set('check_interval_seconds', 'CHECK_INTERVAL_SECONDS', cls.model_fields['check_interval_seconds'].default)
         _set('max_processes_per_cycle', 'MAX_PROCESSES_PER_CYCLE', cls.model_fields['max_processes_per_cycle'].default)
         _set('request_timeout_seconds', 'REQUEST_TIMEOUT_SECONDS', cls.model_fields['request_timeout_seconds'].default)

@@ -4,7 +4,7 @@ Serviço de notificações.
 Responsabilidades:
   - Criar registros de Notification a partir de uma DetectedChange
   - Despachar notificações pendentes para os canais corretos
-  - Montar mensagens humanizadas para e-mail e WhatsApp
+  - Montar mensagens humanizadas para e-mail, WhatsApp e Telegram
   - Registrar tentativas com status e erro
 
 Design: sem fila pesada. O envio é sequencial dentro de um ciclo do worker.
@@ -65,13 +65,14 @@ def create_notifications_for_change(change: DetectedChange) -> list[Notification
     subscriptions = (
         ProcessSubscription.objects
         .filter(process=change.process)
-        .select_related('subscriber')
+        .select_related('subscriber', 'subscriber__telegram_chat')
     )
     created: list[Notification] = []
 
     for sub in subscriptions:
         subscriber = sub.subscriber
-        if not subscriber.is_reachable():
+        # paused = /pause do bot, vale para todos os canais daquela assinatura.
+        if sub.paused or not subscriber.is_reachable():
             continue
 
         # Canal e-mail
@@ -81,6 +82,24 @@ def create_notifications_for_change(change: DetectedChange) -> list[Notification
                 subscriber=subscriber,
                 channel=NotificationChannel.EMAIL,
                 destination=subscriber.email,
+                status=NotificationStatus.PENDING,
+            )
+            _create_document_states(notification)
+            created.append(notification)
+
+        # Canal Telegram (canal principal; destino = chat_id do TelegramChat)
+        telegram_chat = getattr(subscriber, 'telegram_chat', None)
+        if (
+            sub.telegram_enabled
+            and settings.TELEGRAM_ENABLED
+            and telegram_chat is not None
+            and telegram_chat.is_reachable
+        ):
+            notification = Notification.objects.create(
+                change=change,
+                subscriber=subscriber,
+                channel=NotificationChannel.TELEGRAM,
+                destination=str(telegram_chat.chat_id),
                 status=NotificationStatus.PENDING,
             )
             _create_document_states(notification)
@@ -271,7 +290,55 @@ def _dispatch_payload(
             return NotificationStatus.PENDING, 'Parte dos anexos WhatsApp será reenviada automaticamente.'
         return NotificationStatus.SENT, None
 
+    if notification.channel == NotificationChannel.TELEGRAM:
+        return _dispatch_telegram(
+            notification, process, include_main_message, attachment_candidates, unresolved_docs,
+        )
+
     return NotificationStatus.SKIPPED, f'Canal desconhecido: {notification.channel}'
+
+
+def _dispatch_telegram(
+    notification: Notification,
+    process,
+    include_main_message: bool,
+    attachment_candidates: list[dict[str, object]],
+    unresolved_docs: list[dict[str, str]],
+) -> tuple[str, str | None]:
+    """Mesmo fluxo do WhatsApp: mensagem principal (ou complemento) + anexos por URL."""
+    from .channels.telegram import send_telegram_document, send_telegram_message
+
+    if include_main_message:
+        body = _build_body(process, notification.change, notification.channel, unresolved_docs)
+    elif not attachment_candidates:
+        return NotificationStatus.SENT, None
+    else:
+        body = _build_complement_body(process, notification.change, unresolved_docs)
+
+    status, error = send_telegram_message(notification.destination, body, process_url=process.effective_url)
+    if status != NotificationStatus.SENT:
+        return status, error
+
+    failed_docs: list[str] = []
+    sent_any = False
+    for item in attachment_candidates:
+        attachment = item['attachment']
+        doc_status, doc_error = send_telegram_document(
+            chat_id=notification.destination,
+            document_url=str(attachment.get('url') or ''),
+            filename=str(attachment.get('filename') or 'documento'),
+        )
+        if doc_status == NotificationStatus.SENT:
+            sent_any = True
+            continue
+        _mark_state_pending(item['state'], doc_error or 'Falha ao enviar anexo via Telegram')
+        failed_docs.append(str(attachment.get('filename') or attachment.get('document') or 'documento'))
+
+    if failed_docs and not sent_any:
+        return NotificationStatus.PENDING, 'Falha no envio de anexos via Telegram.'
+    if failed_docs:
+        return NotificationStatus.PENDING, 'Parte dos anexos do Telegram será reenviada automaticamente.'
+    return NotificationStatus.SENT, None
 
 
 def _create_document_states(notification: Notification) -> None:
@@ -326,9 +393,9 @@ def _prepare_attachments_for_channel(
             unresolved_docs.append({'document': doc.document_number, 'reason': state.last_error, 'url': ''})
             continue
 
-        if notification.channel == NotificationChannel.WHATSAPP:
-            # A Evolution API recebe só a URL pública e busca o arquivo do lado
-            # dela — o conteúdo baixado aqui nunca seria usado, então não faz
+        if notification.channel in (NotificationChannel.WHATSAPP, NotificationChannel.TELEGRAM):
+            # A Evolution API e o Telegram recebem só a URL pública e buscam o arquivo do
+            # lado deles — o conteúdo baixado aqui nunca seria usado, então não faz
             # sentido gastar banda/memória baixando o documento inteiro só para
             # descartar em seguida (spec 002-repo-hardening-cleanup, FR-009).
             filename = _safe_document_filename(doc.document_number, doc.title, '', doc.url)

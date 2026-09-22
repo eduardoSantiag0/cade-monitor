@@ -357,3 +357,25 @@ class RunWorkerConnectionTest(TestCase):
         call_command('run_worker', '--once', stdout=MagicMock())
         # uma no início do ciclo + uma no tratamento do erro
         self.assertEqual(mock_close.call_count, 2)
+
+
+class RunWorkerCycleOrderTest(TestCase):
+    @patch('apps.notifications.services.send_pending_notifications', return_value={'total': 0})
+    @patch('apps.monitoring.scheduler.get_due_processes', return_value=[])
+    def test_notifications_are_sent_even_without_due_processes(self, _due, mock_send):
+        from django.core.management import call_command
+
+        call_command('run_worker', '--once', stdout=MagicMock())
+        mock_send.assert_called_once()
+
+    @patch('apps.notifications.services.send_pending_notifications', return_value={'total': 0})
+    @patch('apps.monitoring.scheduler.get_due_processes', return_value=[])
+    @patch('apps.telegram_bot.actions.process_pending_bot_actions')
+    def test_bot_actions_run_only_when_telegram_enabled(self, mock_actions, _due, _send):
+        from django.core.management import call_command
+
+        call_command('run_worker', '--once', stdout=MagicMock())
+        mock_actions.assert_not_called()
+        with self.settings(TELEGRAM_ENABLED=True):
+            call_command('run_worker', '--once', stdout=MagicMock())
+        mock_actions.assert_called_once()

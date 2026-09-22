@@ -2,9 +2,9 @@
 Worker de monitoramento contínuo.
 
 Executa um loop que, a cada tick:
-  1. Busca processos ativos com checagem vencida
-  2. Verifica um por um (sequencial — evita lock de SQLite)
-  3. Envia notificações pendentes
+  1. Executa ações pendentes do bot do Telegram (/watch, /check)
+  2. Busca processos ativos com checagem vencida e verifica um por um
+  3. Envia notificações pendentes (sempre)
   4. Dorme pelo WORKER_TICK_SECONDS antes de repetir
 
 Uso:
@@ -77,11 +77,19 @@ class Command(BaseCommand):
         # regras de CONN_MAX_AGE/CONN_HEALTH_CHECKS (conexões encerradas pelo provedor).
         close_old_connections()
 
-        due = get_due_processes(settings.MAX_PROCESSES_PER_CYCLE)
-        if not due:
-            return
+        # 1. Pedidos do bot do Telegram (primeira leitura do /watch, /check).
+        if settings.TELEGRAM_ENABLED:
+            from apps.telegram_bot.actions import process_pending_bot_actions
+            try:
+                process_pending_bot_actions()
+            except Exception as exc:
+                logger.error('[worker] Erro nas ações do bot: %s', exc, exc_info=True)
+                sentry_sdk.capture_exception(exc)
 
-        logger.info('[worker] Ciclo: %d processo(s) a verificar.', len(due))
+        # 2. Processos com checagem vencida.
+        due = get_due_processes(settings.MAX_PROCESSES_PER_CYCLE)
+        if due:
+            logger.info('[worker] Ciclo: %d processo(s) a verificar.', len(due))
 
         for process in due:
             if not self._running:
@@ -104,7 +112,8 @@ class Command(BaseCommand):
             if sleep > 0 and self._running:
                 time.sleep(sleep)
 
-        # Envia notificações acumuladas neste ciclo
+        # 3. Notificações pendentes — sempre, não só em ciclos com processos vencidos
+        #    (mudanças achadas por /check e retentativas também precisam sair).
         try:
             stats = send_pending_notifications()
             if stats.get('total', 0) > 0:

@@ -109,3 +109,23 @@ class BuildDatabasesTest(SimpleTestCase):
     def test_negative_conn_max_age_is_rejected(self):
         with self.assertRaises(ValidationError):
             _env(DB_CONN_MAX_AGE='-1')
+
+
+class TelegramEnvTest(SimpleTestCase):
+    def test_enabled_requires_token_and_strong_secret(self):
+        with self.assertRaisesMessage(ValidationError, 'TELEGRAM_BOT_TOKEN'):
+            _env(TELEGRAM_ENABLED='true', TELEGRAM_WEBHOOK_SECRET='x' * 20)
+        with self.assertRaisesMessage(ValidationError, 'TELEGRAM_WEBHOOK_SECRET'):
+            _env(TELEGRAM_ENABLED='true', TELEGRAM_BOT_TOKEN='1:A', TELEGRAM_WEBHOOK_SECRET='curto')
+
+    def test_valid_config_and_minimums(self):
+        env = _env(
+            TELEGRAM_ENABLED='true', TELEGRAM_BOT_TOKEN='1:A', TELEGRAM_WEBHOOK_SECRET='a' * 32,
+            TELEGRAM_BOT_USERNAME='@CadeBot', TELEGRAM_CHECK_COOLDOWN_SECONDS='5', BASE_URL='https://x.example/',
+        )
+        self.assertEqual(env.telegram_bot_username, 'CadeBot')
+        self.assertEqual(env.telegram_check_cooldown_seconds, 60)
+        self.assertEqual(env.base_url, 'https://x.example')
+
+    def test_disabled_by_default_needs_nothing(self):
+        self.assertFalse(_env().telegram_enabled)

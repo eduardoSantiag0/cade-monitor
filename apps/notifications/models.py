@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 class NotificationChannel(models.TextChoices):
     EMAIL = 'email', _('E-mail')
     WHATSAPP = 'whatsapp', _('WhatsApp')
+    TELEGRAM = 'telegram', _('Telegram')
 
 
 class NotificationStatus(models.TextChoices):

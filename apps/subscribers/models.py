@@ -77,6 +77,12 @@ class ProcessSubscription(models.Model):
     )
     email_enabled = models.BooleanField(_('notificar por e-mail'), default=True)
     whatsapp_enabled = models.BooleanField(_('notificar por WhatsApp'), default=True)
+    telegram_enabled = models.BooleanField(_('notificar por Telegram'), default=False)
+    paused = models.BooleanField(
+        _('pausada'),
+        default=False,
+        help_text=_('Pausada pelo assinante (/pause): nenhum canal é notificado.'),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

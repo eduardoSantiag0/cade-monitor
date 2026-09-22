@@ -23,9 +23,9 @@
     ✅ .specify/templates/spec-template.md — sem mudanças necessárias
     ✅ .specify/templates/tasks-template.md — sem mudanças necessárias
     ✅ README.md — stack e configuração de banco atualizadas (feature 005)
-    ⚠ README.md — seção do Telegram pendente (feature 006)
+    ✅ README.md — seção do bot do Telegram (feature 006)
     ✅ .env.example — DATABASE_URL/DB_* documentadas (feature 005)
-    ⚠ .env.example — TELEGRAM_* pendentes (feature 006)
+    ✅ .env.example — TELEGRAM_* documentadas (feature 006)
   Deferred TODOs: None
 -->
 

@@ -303,3 +303,72 @@ class AttachmentDownloadPerChannelTest(TestCase):
         dispatch_notification(notification)
 
         mock_download_document.assert_called_once()
+
+
+class TelegramNotificationsTest(TestCase):
+    """Canal Telegram no pipeline de notificações (spec 006, US2)."""
+
+    def setUp(self):
+        from django.test import override_settings
+
+        from apps.telegram_bot.models import TelegramChat
+
+        self.enabled = override_settings(TELEGRAM_ENABLED=True, TELEGRAM_BOT_TOKEN='123:ABC')
+        self.enabled.enable()
+        self.addCleanup(self.enabled.disable)
+        self.process = _make_process()
+        self.subscriber = Subscriber.objects.create(name='Ana', email_enabled=False, whatsapp_enabled=False)
+        self.chat = TelegramChat.objects.create(
+            chat_id=42, chat_type='private', title='Ana', subscriber=self.subscriber,
+        )
+        self.sub = ProcessSubscription.objects.create(
+            subscriber=self.subscriber, process=self.process,
+            email_enabled=False, whatsapp_enabled=False, telegram_enabled=True,
+        )
+
+    def test_creates_telegram_notification(self):
+        notifications = create_notifications_for_change(_make_change(self.process))
+        self.assertEqual([(n.channel, n.destination) for n in notifications], [(NotificationChannel.TELEGRAM, '42')])
+
+    def test_skips_paused_unreachable_or_disabled(self):
+        cases = [
+            ('paused', lambda: ProcessSubscription.objects.update(paused=True)),
+            ('unreachable', lambda: type(self.chat).objects.update(is_reachable=False)),
+        ]
+        for name, apply in cases:
+            with self.subTest(name), self.settings(TELEGRAM_ENABLED=True):
+                apply()
+                self.assertEqual(create_notifications_for_change(_make_change(self.process)), [])
+        with self.settings(TELEGRAM_ENABLED=False):
+            ProcessSubscription.objects.update(paused=False)
+            type(self.chat).objects.update(is_reachable=True)
+            self.assertEqual(create_notifications_for_change(_make_change(self.process)), [])
+
+    def test_paused_subscription_skips_email_too(self):
+        self.subscriber.email = 'ana@example.com'
+        self.subscriber.email_enabled = True
+        self.subscriber.save()
+        ProcessSubscription.objects.update(email_enabled=True, paused=True)
+        self.assertEqual(create_notifications_for_change(_make_change(self.process)), [])
+
+    @patch('apps.telegram_bot.client.send_message')
+    def test_dispatch_sends_and_logs_attempt(self, mock_send):
+        from apps.notifications.models import NotificationAttempt
+        from apps.telegram_bot.client import TelegramResult
+
+        mock_send.return_value = TelegramResult(ok=True)
+        notification = create_notifications_for_change(_make_change(self.process))[0]
+        self.assertEqual(dispatch_notification(notification), NotificationStatus.SENT)
+        self.assertEqual(mock_send.call_args.args[0], '42')
+        self.assertIn('Processo Teste', mock_send.call_args.args[1])
+        self.assertEqual(NotificationAttempt.objects.filter(notification=notification).count(), 1)
+
+    @patch('apps.telegram_bot.client.send_message')
+    def test_transient_failure_is_retried_until_limit(self, mock_send):
+        from apps.telegram_bot.client import TelegramResult
+
+        mock_send.return_value = TelegramResult(ok=False, error_code=429, description='Too Many Requests')
+        notification = create_notifications_for_change(_make_change(self.process))[0]
+        with self.settings(MAX_NOTIFICATION_ATTEMPTS=2):
+            self.assertEqual(dispatch_notification(notification), NotificationStatus.PENDING)
+            self.assertEqual(dispatch_notification(notification), NotificationStatus.FAILED)

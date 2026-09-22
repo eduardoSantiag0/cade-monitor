@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'apps.notifications.apps.NotificationsConfig',
     'apps.subscribers.apps.SubscribersConfig',
     'apps.dashboard.apps.DashboardConfig',
+    'apps.telegram_bot.apps.TelegramBotConfig',
 ]
 
 MIDDLEWARE = [
@@ -147,6 +148,20 @@ AUTHENTICATION_API_KEY = env.authentication_api_key
 EVOLUTION_API_KEY = env.evolution_api_key
 EVOLUTION_INSTANCE_NAME = env.evolution_instance_name
 EVOLUTION_TIMEOUT_SECONDS = env.evolution_timeout_seconds
+
+# ---------------------------------------------------------------------------
+# Telegram (canal principal — webhook em /telegram/webhook/)
+# ---------------------------------------------------------------------------
+BASE_URL = env.base_url
+TELEGRAM_ENABLED = env.telegram_enabled
+TELEGRAM_BOT_TOKEN = env.telegram_bot_token
+TELEGRAM_WEBHOOK_SECRET = env.telegram_webhook_secret
+TELEGRAM_BOT_USERNAME = env.telegram_bot_username
+TELEGRAM_MAX_PROCESSES_PER_CHAT = env.telegram_max_processes_per_chat
+# Intervalo mínimo entre consultas ao SEI pedidas por /check (e entre retentativas da 1ª leitura).
+TELEGRAM_CHECK_COOLDOWN_SECONDS = env.telegram_check_cooldown_seconds
+TELEGRAM_HISTORY_LIMIT = env.telegram_history_limit
+TELEGRAM_TIMEOUT_SECONDS = env.telegram_timeout_seconds
 
 # ---------------------------------------------------------------------------
 # Monitoramento
