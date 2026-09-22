@@ -14,6 +14,58 @@ e receba um aviso, com o documento anexado, sempre que surgir uma movimentação
 
 ---
 
+## Desenvolvimento orientado a especificação (Spec Kit)
+
+Este projeto é construído com o [GitHub Spec Kit](https://github.com/github/spec-kit)
+(*Spec-Driven Development*). **Nenhuma feature começa pelo código:** primeiro vem a
+especificação (o quê e por quê), depois o plano técnico (como), depois as tarefas, e só então a
+implementação. Tudo é conferido contra a **constituição** do projeto.
+
+```mermaid
+flowchart LR
+    C[constitution<br/>princípios] --> S[specify<br/>spec.md]
+    S --> CL[clarify<br/>dúvidas resolvidas]
+    CL --> P[plan<br/>plan · research · data-model<br/>contracts · quickstart]
+    P --> T[tasks<br/>tasks.md]
+    T --> A[analyze<br/>consistência]
+    A --> I[implement<br/>código + testes]
+    I -. mudança de princípio .-> C
+```
+
+| Etapa | Comando | O que produz |
+|---|---|---|
+| 1. Constituição | `/speckit.constitution` | `.specify/memory/constitution.md`: os princípios inegociáveis (monitoramento responsável, monolito Django, PostgreSQL, Telegram sem SDK, sem over-engineering). Mudanças são versionadas (semver) e registradas num *Sync Impact Report*. |
+| 2. Especificação | `/speckit.specify` | `specs/NNN-nome/spec.md`: histórias de usuário priorizadas (P1, P2…), requisitos funcionais testáveis, critérios de sucesso mensuráveis e casos de borda, sem detalhes de implementação. Também gera o `checklists/requirements.md`. |
+| 3. Esclarecimento | `/speckit.clarify` | Perguntas sobre pontos ambíguos. As respostas ficam registradas na seção *Clarifications* da spec. |
+| 4. Plano | `/speckit.plan` | `plan.md` (contexto técnico e o **Constitution Check** obrigatório), `research.md` (decisões e alternativas descartadas), `data-model.md`, `contracts/` e `quickstart.md` (roteiro de validação ponta a ponta). |
+| 5. Tarefas | `/speckit.tasks` | `tasks.md`: tarefas numeradas, agrupadas por história de usuário, com dependências, marcação de paralelismo `[P]` e um MVP definido. |
+| 6. Análise | `/speckit.analyze` | Checagem cruzada de spec, plano e tarefas antes de implementar. |
+| 7. Implementação | `/speckit.implement` | Código e testes, marcando cada tarefa como concluída `[X]` em `tasks.md`. |
+
+**Regras do fluxo neste repositório**
+- **Um diretório por feature:** `specs/NNN-nome/`, numerado em sequência. O
+  `.specify/feature.json` aponta a feature ativa.
+- **Constituição antes do código:** toda decisão que contraria um princípio (novo banco, novo
+  canal, nova dependência) exige uma emenda antes. Foi assim que a v2.0.0 adotou o PostgreSQL e
+  o Telegram.
+- **Os documentos acompanham o código:** o que muda na implementação volta para
+  `research.md`/`tasks.md`, como as seções "pós-implementação" da 006.
+- **Integração:** os prompts ficam em `.github/prompts/speckit.*.prompt.md` e os agentes em
+  `.github/agents/`. Os templates e scripts estão em `.specify/`.
+
+**Features**
+
+| Feature | Conteúdo |
+|---|---|
+| `001-cade-monitor` | Base: monitoramento do SEI, diff, painel, e-mail/WhatsApp |
+| `002-repo-hardening-cleanup` | Segurança, CI, dependências fixadas, remoção de legado |
+| `003-auto-monitor-processos-relacionados` | Processos relacionados |
+| `004-confiabilidade-operacional` | Alertas operacionais e confiabilidade do worker |
+| `005-postgres-render` | PostgreSQL 18 como banco principal, com fallback SQLite |
+| `006-telegram-bot` | Bot do Telegram, alertas com documento, `/last_update` |
+
+---
+
 ## Como funciona
 
 ```
@@ -264,24 +316,6 @@ python manage.py test tests
 O GitHub Actions roda a suíte duas vezes: com SQLite e contra um PostgreSQL 18 real (job
 `test-postgres`), além de checar se falta alguma migration. As chamadas externas (SEI, Bot API,
 SMTP, Evolution) são sempre mockadas.
-
----
-
-## Como o projeto é desenvolvido
-
-O projeto segue o [Spec Kit](https://github.com/github/spec-kit) (Spec-Driven Development). Cada
-feature tem spec, plano, pesquisa, contratos e tarefas em `specs/NNN-nome/`. Os princípios
-arquiteturais, como monitoramento responsável, monolito Django, PostgreSQL, Telegram sem SDK e
-nada de over-engineering, estão em
-[`.specify/memory/constitution.md`](.specify/memory/constitution.md).
-
-| Feature | Conteúdo |
-|---|---|
-| `001-cade-monitor` | Base: monitoramento, diff, painel, e-mail/WhatsApp |
-| `002-repo-hardening-cleanup` | Segurança, CI, dependências fixadas |
-| `005-postgres-render` | PostgreSQL 18 como banco principal |
-| `006-telegram-bot` | Bot do Telegram, alertas com documento, `/last_update` |
-| `003`, `004` | Processos relacionados e confiabilidade operacional (ver `specs/`) |
 
 ---
 
