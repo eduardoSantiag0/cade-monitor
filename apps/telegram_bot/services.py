@@ -15,6 +15,8 @@ import math
 from collections.abc import Callable
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -27,8 +29,8 @@ from .parsing import TgChat, TgChatMemberUpdated, TgMessage, TgUpdate, normalize
 
 logger = logging.getLogger(__name__)
 
-# Comandos que alteram o que o chat acompanha: em grupos, só administradores.
-MANAGEMENT_COMMANDS = {'watch', 'unwatch', 'pause', 'resume'}
+# Comandos que alteram o que o chat acompanha (ou suas preferências): em grupos, só administradores.
+MANAGEMENT_COMMANDS = {'watch', 'unwatch', 'pause', 'resume', 'email'}
 ADMIN_STATUSES = {'creator', 'administrator'}
 GONE_STATUSES = {'left', 'kicked'}
 
@@ -259,7 +261,12 @@ def cmd_watch(chat: TelegramChat, args: str) -> str:
     ProcessSubscription.objects.get_or_create(
         subscriber_id=chat.subscriber_id,
         process=process,
-        defaults={'email_enabled': False, 'whatsapp_enabled': False, 'telegram_enabled': True},
+        defaults={
+            # Se o chat já tem e-mail cadastrado (/email), o processo novo já sai habilitado.
+            'email_enabled': bool(chat.subscriber.email_enabled and chat.subscriber.email),
+            'whatsapp_enabled': False,
+            'telegram_enabled': True,
+        },
     )
     recalculate_process_status(process)
 
@@ -371,6 +378,32 @@ def cmd_last_update(chat: TelegramChat, args: str) -> str:
     return messages.latest_queued(process.label)
 
 
+def cmd_email(chat: TelegramChat, args: str) -> str:
+    """Cadastra/remove o e-mail do chat: /email <endereço> liga o canal, /email off desliga."""
+    subscriber = chat.subscriber
+    arg = args.strip()
+    if not arg:
+        return messages.email_status(subscriber.email, subscriber.email_enabled)
+
+    if arg.lower() == 'off':
+        subscriber.email = ''
+        subscriber.email_enabled = False
+        subscriber.save(update_fields=['email', 'email_enabled'])
+        ProcessSubscription.objects.filter(subscriber_id=chat.subscriber_id).update(email_enabled=False)
+        return messages.email_removed()
+
+    try:
+        validate_email(arg)
+    except ValidationError:
+        return messages.email_invalid()
+
+    subscriber.email = arg
+    subscriber.email_enabled = True
+    subscriber.save(update_fields=['email', 'email_enabled'])
+    ProcessSubscription.objects.filter(subscriber_id=chat.subscriber_id).update(email_enabled=True)
+    return messages.email_saved(arg)
+
+
 COMMANDS: dict[str, Callable[[TelegramChat, str], str]] = {
     'start': cmd_start,
     'help': cmd_help,
@@ -383,4 +416,5 @@ COMMANDS: dict[str, Callable[[TelegramChat, str], str]] = {
     'resume': cmd_resume,
     'check': cmd_check,
     'last_update': cmd_last_update,
+    'email': cmd_email,
 }

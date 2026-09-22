@@ -22,6 +22,7 @@ from django.utils import timezone
 
 from apps.monitoring.clients import (
     FetchError,
+    NativeDocumentError,
     _looks_like_compressed,
     download_document,
     extract_document_links,
@@ -205,6 +206,8 @@ def _build_latest_update(process: MonitoredProcess) -> tuple[str, dict | None]:
                     max_bytes=settings.TELEGRAM_ATTACHMENT_MAX_BYTES,
                 )
                 note = 'Documento em anexo logo abaixo.'
+            except NativeDocumentError:
+                note = 'Documento nativo do SEI (despacho/certidão/ata): sem arquivo para baixar, veja pelo link acima.'
             except FetchError as exc:
                 note = f'Não consegui baixar o documento agora ({exc}). Use o link acima.'
     elif record:

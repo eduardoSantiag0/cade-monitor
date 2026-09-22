@@ -307,6 +307,81 @@ class RedisCacheFallbackTest(TestCase):
         self.assertEqual(self.process.last_hash, 'hash_novo_sem_redis')
 
 
+class NativeSeiDocumentTest(TestCase):
+    """
+    Documentos gerados no próprio editor do SEI (despacho, certidão, ata...) não
+    têm arquivo binário: o link de download devolve a página HTML renderizada.
+    O bot não deve tratar essa página como o "documento" a anexar.
+    """
+
+    def _html_response(self, body: bytes = b'<!DOCTYPE html><html><body>Certidao</body></html>'):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = body
+        response.headers.get_content_type.return_value = 'text/html'
+        return response
+
+    def _pdf_response(self, body: bytes = b'%PDF-1.4 conteudo falso'):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = body
+        response.headers.get_content_type.return_value = 'application/pdf'
+        return response
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_html_response_raises_native_document_error(self, mock_urlopen):
+        from apps.monitoring.clients import NativeDocumentError, download_document
+
+        mock_urlopen.return_value = self._html_response()
+        with self.assertRaises(NativeDocumentError):
+            download_document(
+                url='https://sei.cade.gov.br/md_pesq_documento_consulta_externa.php?1779858',
+                record={'document': '1779858', 'doc_type': 'Certidao'},
+                timeout=5, user_agent='test',
+            )
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_real_pdf_is_still_downloaded_normally(self, mock_urlopen):
+        from apps.monitoring.clients import download_document
+
+        mock_urlopen.return_value = self._pdf_response()
+        result = download_document(
+            url='https://sei.cade.gov.br/md_pesq_documento_consulta_externa.php?123',
+            record={'document': '123', 'doc_type': 'Parecer'},
+            timeout=5, user_agent='test',
+        )
+        self.assertEqual(result['content_type'], 'application/pdf')
+        self.assertEqual(result['content'], b'%PDF-1.4 conteudo falso')
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_collect_new_documents_reports_native_document_as_link_only(self, mock_urlopen):
+        from apps.monitoring.clients import Snapshot, collect_new_documents
+
+        mock_urlopen.return_value = self._html_response()
+        old_text = 'Lista de Protocolos\nProcesso / Documento\nTipo\nData\nData de Registro\nUnidade\n'
+        new_text = old_text + '1779858\nCertidao\n01/09/2026\n02/09/2026\nARQ\n'
+        html = '<a href="md_pesq_documento_consulta_externa.php?1779858">1779858</a>'
+        snapshot = Snapshot(
+            url='https://sei.cade.gov.br/processo',
+            status_code=200,
+            title='Processo',
+            text=new_text,
+            content_hash='h',
+            fetched_at='2026-09-22T10:00:00+00:00',
+            content_length=len(html),
+            html=html,
+        )
+
+        results = collect_new_documents(old_text, snapshot, timeout=5, user_agent='test')
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['mode'], 'link_only')
+        self.assertEqual(results[0]['status'], 'link_only')
+        self.assertFalse(results[0]['retryable'])
+
+
 class PostgresPortabilityTest(TestCase):
     """Comportamentos que diferem entre SQLite e Postgres (spec 005, research R8)."""
 

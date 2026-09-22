@@ -8,7 +8,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.monitoring.clients import FetchError
+from apps.monitoring.clients import FetchError, NativeDocumentError
 from apps.monitoring.models import DetectedChange, DetectedDocument, PageSnapshot
 from apps.notifications.models import NotificationChannel, NotificationStatus
 from apps.notifications.services import create_notifications_for_change, dispatch_notification
@@ -127,6 +127,20 @@ class UltimaCommandTest(TestCase):
         text = sent_texts(self.mock_send)[0]
         self.assertIn('Não consegui baixar o documento', text)
         self.assertIn(DOC_URL, text)
+        self.mock_doc.assert_not_called()
+
+    @patch('apps.telegram_bot.actions.extract_document_links', return_value={'7654321': DOC_URL})
+    @patch('apps.telegram_bot.actions.get_snapshot', return_value=_snapshot())
+    @patch('apps.telegram_bot.actions.download_document', side_effect=NativeDocumentError('nativo'))
+    def test_native_sei_document_gets_clear_note_not_generic_failure(self, _mock_download, _mock_page, _links):
+        self.send(f'/watch {PROC}')
+        self.send(f'/last_update {PROC}')
+        self.mock_send.reset_mock()
+        process_pending_bot_actions()
+        text = sent_texts(self.mock_send)[0]
+        self.assertIn('nativo do SEI', text)
+        self.assertIn(DOC_URL, text)
+        self.assertNotIn('Não consegui baixar', text)
         self.mock_doc.assert_not_called()
 
 

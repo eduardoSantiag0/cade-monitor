@@ -194,6 +194,50 @@ class ManageTest(CommandTestBase):
 
 
 @telegram_settings
+class EmailTest(CommandTestBase):
+    def setUp(self):
+        super().setUp()
+        self.make_baseline_process()
+        self.send(f'/watch {PROC}')
+
+    def test_no_args_shows_status(self):
+        self.assertIn('Nenhum e-mail cadastrado', self.send('/email'))
+
+    def test_invalid_email_is_rejected(self):
+        self.assertIn('inválido', self.send('/email não-é-email'))
+        self.assertFalse(self.chat().subscriber.email)
+
+    def test_valid_email_enables_channel_for_current_subscriptions(self):
+        text = self.send('/email ana@example.com')
+        self.assertIn('cadastrado', text)
+        subscriber = self.chat().subscriber
+        self.assertEqual(subscriber.email, 'ana@example.com')
+        self.assertTrue(subscriber.email_enabled)
+        sub = ProcessSubscription.objects.get(subscriber=subscriber)
+        self.assertTrue(sub.email_enabled)
+
+    def test_status_after_registering_shows_address(self):
+        self.send('/email ana@example.com')
+        self.assertIn('ana@example.com', self.send('/email'))
+
+    def test_off_clears_email_and_disables_channel(self):
+        self.send('/email ana@example.com')
+        text = self.send('/email off')
+        self.assertIn('removido', text)
+        subscriber = self.chat().subscriber
+        self.assertEqual(subscriber.email, '')
+        self.assertFalse(subscriber.email_enabled)
+        sub = ProcessSubscription.objects.get(subscriber=subscriber)
+        self.assertFalse(sub.email_enabled)
+
+    def test_new_watch_after_email_registered_starts_enabled(self):
+        self.send('/email ana@example.com')
+        self.send('/watch 08700.000001/2026-01')
+        sub = ProcessSubscription.objects.get(process__source='08700.000001/2026-01')
+        self.assertTrue(sub.email_enabled)
+
+
+@telegram_settings
 class GroupTest(CommandTestBase):
     GROUP = {'chat_id': -500, 'chat_type': 'group', 'title': 'Equipe'}
 
@@ -208,7 +252,7 @@ class GroupTest(CommandTestBase):
 
     def test_member_cannot_manage_but_can_read(self):
         with self._member_status('member'):
-            for cmd in ('watch', 'unwatch', 'pause', 'resume'):
+            for cmd in ('watch', 'unwatch', 'pause', 'resume', 'email'):
                 with self.subTest(cmd=cmd):
                     self.assertIn('só administradores', self.send(f'/{cmd} {PROC}', **self.GROUP))
             self.assertIn('ainda não acompanha', self.send('/list', **self.GROUP))

@@ -23,7 +23,8 @@ COMMANDS_HELP = (
     '🔎 /check <processo> — verificar no SEI agora\n'
     '🔕 /pause <processo> — pausar alertas\n'
     '🔔 /resume <processo> — retomar alertas\n'
-    '📚 /history <processo> — últimas mudanças detectadas'
+    '📚 /history <processo> — últimas mudanças detectadas\n'
+    '📧 /email <endereço> — também receber por e-mail (ou /email off para remover)'
 )
 
 
@@ -116,6 +117,35 @@ def watch_not_found(ref: str) -> str:
         f'🚫 Não encontrei o processo {ref} na pesquisa pública do SEI do CADE. '
         'Confira o número. Processos sigilosos não aparecem na pesquisa pública.'
     )
+
+
+def email_status(email: str, enabled: bool) -> str:
+    if email and enabled:
+        return (
+            f'📧 E-mail cadastrado: {email}\n'
+            '📬 Você recebe notificações por e-mail além do Telegram.\n\n'
+            'Para trocar, envie /email novo@endereco.com\n'
+            'Para remover, envie /email off'
+        )
+    return (
+        '📧 Nenhum e-mail cadastrado.\n'
+        'Envie /email seuemail@dominio.com para também receber as notificações por e-mail.'
+    )
+
+
+def email_invalid() -> str:
+    return '⚠️ E-mail inválido. Envie no formato /email seuemail@dominio.com'
+
+
+def email_saved(email: str) -> str:
+    return (
+        f'✅ E-mail {email} cadastrado!\n'
+        '📬 A partir de agora você recebe notificações por e-mail e por Telegram.'
+    )
+
+
+def email_removed() -> str:
+    return '🚫 E-mail removido. Você volta a receber notificações só pelo Telegram.'
 
 
 def watch_retrying(ref: str) -> str:

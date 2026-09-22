@@ -31,6 +31,7 @@ BOT_COMMANDS = [
     ('pause', '🔕 Pausar alertas de um processo'),
     ('resume', '🔔 Retomar alertas de um processo'),
     ('unwatch', '🚫 Parar de monitorar um processo'),
+    ('email', '📧 Também receber por e-mail: /email seuemail@dominio.com'),
     ('start', '🏛️ Apresentação'),
     ('help', '🧭 Lista de comandos'),
 ]

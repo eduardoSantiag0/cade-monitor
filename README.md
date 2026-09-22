@@ -3,6 +3,8 @@
 **Acompanhe processos públicos do CADE pelo Telegram.** Mande o número do processo para o bot
 e receba um aviso, com o documento anexado, sempre que surgir uma movimentação nova no SEI.
 
+``Notas bore o acesso ao bot`` O nome de usuário do bot não é divulgado publicamente neste repositório para evitar exposição e uso não intencional da instância em produção. Caso queira testar ou conhecer o bot, entre em contato com o autor do projeto.   
+
 ```
 /watch 08700.005905/2026-38
 ```

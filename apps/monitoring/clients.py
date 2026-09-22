@@ -52,6 +52,10 @@ class FetchError(RuntimeError):
     """Erro ao acessar uma página pública ou baixar um documento."""
 
 
+class NativeDocumentError(FetchError):
+    """Documento gerado nativamente no SEI (despacho, certidão etc.): só existe como página HTML, sem arquivo binário para baixar."""
+
+
 class Snapshot(BaseModel):
     """
     Resultado imutável de uma busca de página.
@@ -364,6 +368,19 @@ def _looks_like_compressed(record: dict[str, str], url: str, content_type: str =
     return any(token in lowered_type for token in ('zip', 'rar', 'compact', 'comprim'))
 
 
+def _looks_like_native_sei_document(content_type: str, content: bytes) -> bool:
+    """
+    Documentos gerados no editor do SEI (despachos, certidões, atas...) não têm
+    arquivo binário: o mesmo link de download devolve a página HTML renderizada.
+    Já anexos de verdade (PDF, DOCX, imagens enviadas por uma parte) vêm com o
+    Content-Type real do arquivo.
+    """
+    if content_type.split(';', 1)[0].strip().lower() == 'text/html':
+        return True
+    head = content[:256].lstrip().lower()
+    return head.startswith(b'<!doctype html') or head.startswith(b'<html')
+
+
 def download_document(
     url: str,
     record: dict[str, str],
@@ -401,6 +418,10 @@ def download_document(
                         f'({max_download_bytes // (1024 * 1024)} MB).'
                     )
                 content_type = response.headers.get_content_type() or 'application/octet-stream'
+                if _looks_like_native_sei_document(content_type, content):
+                    raise NativeDocumentError(
+                        f'Documento {record.get("document", "")} é nativo do SEI (sem arquivo para baixar).'
+                    )
                 attachment = AttachmentPayload(
                     document=record.get('document', ''),
                     title=record.get('doc_type', ''),
@@ -488,6 +509,16 @@ def collect_new_documents(
                 retryable=True,
                 error='',
                 attachment=attachment,
+            ).model_dump())
+        except NativeDocumentError:
+            results.append(DocumentResult(
+                document=doc_number,
+                title=record.get('doc_type', ''),
+                url=url,
+                mode='link_only',
+                status='link_only',
+                retryable=False,
+                error='Documento nativo do SEI (despacho/certidão/ata): sem arquivo para baixar, só o link.',
             ).model_dump())
         except FetchError as exc:
             results.append(DocumentResult(
