@@ -1,5 +1,36 @@
 <!--
   SYNC IMPACT REPORT
+  Version change: 1.1.0 → 2.0.0 (MAJOR)
+
+  Modified principles:
+    - I. Simplicidade Operacional — webhook do Telegram roda dentro do Gunicorn existente;
+      ações pesadas do bot são executadas pelo `run_worker` via tabela no banco (não é fila).
+    - III. Django Monolítico Bem Organizado — novo app de domínio `telegram_bot`.
+    - IV. "SQLite em Produção" → "PostgreSQL em Produção" (redefinição incompatível):
+      PostgreSQL 18 gerenciado (Render) via `DATABASE_URL`; SQLite restrito a dev/testes.
+    - V. "Notificações via Evolution API (WhatsApp) e SMTP" → "Notificações via Telegram,
+      Evolution API e SMTP": Telegram Bot API passa a ser o canal principal.
+    - VIII. Sem Over-Engineering — registra justificativa da dependência `psycopg[binary]`.
+  Modified sections: Tech Stack Canônico (Banco, Mensageria, dependências).
+  Added sections: None
+  Removed sections: None
+  Rationale: Features 005-postgres-render e 006-telegram-bot. O dono do projeto decidiu
+    tornar o Telegram o canal principal de comunicação com usuários (autoatendimento via
+    comandos) e usar PostgreSQL 18 no Render como banco principal.
+  Templates requiring updates:
+    ✅ .specify/memory/constitution.md — this file
+    ✅ .specify/templates/plan-template.md — gates são derivados da constituição; sem mudança
+    ✅ .specify/templates/spec-template.md — sem mudanças necessárias
+    ✅ .specify/templates/tasks-template.md — sem mudanças necessárias
+    ✅ README.md — stack e configuração de banco atualizadas (feature 005)
+    ⚠ README.md — seção do Telegram pendente (feature 006)
+    ✅ .env.example — DATABASE_URL/DB_* documentadas (feature 005)
+    ⚠ .env.example — TELEGRAM_* pendentes (feature 006)
+  Deferred TODOs: None
+-->
+
+<!--
+  SYNC IMPACT REPORT (histórico)
   Version change: 1.0.0 → 1.1.0
 
   Modified principles:
@@ -61,6 +92,10 @@ CPU/memória em idle e sob carga típica (dezenas de processos monitorados).
     `MonitoredProcess.last_hash` como fallback — Redis nunca é fonte única de verdade.
   - MUST NOT: Usar Redis para qualquer outra finalidade (fila, sessão, cache de página,
     pub/sub) sem nova emenda a este princípio.
+- MUST: O webhook do Telegram é uma view no Gunicorn existente — nenhum processo extra para o bot.
+- MUST: Ações do bot que consultam o SEI (primeira leitura do `/watch`, `/check`) são gravadas
+  numa tabela do banco e executadas pelo `run_worker`, no mesmo padrão das notificações
+  pendentes. O webhook MUST responder rápido e NUNCA fazer scraping no request.
 
 ### II. Monitoramento Responsável
 
@@ -78,30 +113,40 @@ O sistema DEVE consultar apenas páginas públicas do CADE/SEI e respeitar uma c
 A aplicação segue uma arquitetura Django monolítica com apps separados por domínio. A lógica de
 negócio reside em `services.py`; consultas complexas em `selectors.py`. Views são finas.
 
-- MUST: Apps de domínio: `processes`, `monitoring`, `notifications`, `subscribers`, `dashboard`.
+- MUST: Apps de domínio: `processes`, `monitoring`, `notifications`, `subscribers`, `dashboard`,
+  `telegram_bot`.
 - MUST: Lógica de negócio em `services.py`; queries reutilizáveis em `selectors.py`.
 - MUST: Views apenas orquestram: validam entrada, chamam service, retornam resposta.
 - MUST NOT: Colocar lógica de negócio em models, views ou templates.
 - MUST NOT: Criar microserviços, APIs REST autônomas ou separar o projeto em múltiplos repositórios.
 
-### IV. SQLite em Produção
+### IV. PostgreSQL em Produção
 
-O banco de dados de produção É SQLite com WAL mode ativado. Esta é uma escolha deliberada e
-permanente para o escopo do projeto.
+O banco de dados de produção É PostgreSQL 18 gerenciado (Render), configurado exclusivamente via
+`DATABASE_URL`. SQLite permanece como fallback para desenvolvimento local e testes quando
+`DATABASE_URL` não está definida.
 
-- MUST: Ativar WAL mode via signal `connection_created` no `MonitoringConfig.ready()`.
-- MUST: Persistir o arquivo SQLite em volume Docker mapeado para o host.
-- MUST: Manter um único worker sequencial para evitar contention de escrita.
-- MUST NOT: Introduzir PostgreSQL, MySQL, ou qualquer banco servidor como dependência de produção.
-- MUST NOT: Usar múltiplos workers Django que escrevam no banco simultaneamente.
+- MUST: Credenciais do banco apenas em variável de ambiente (`DATABASE_URL`); NUNCA no repositório.
+- MUST: Conexões ao Postgres externas ao Render usam TLS (`sslmode=require`).
+- MUST: Código e migrations portáveis entre PostgreSQL e SQLite (sem SQL específico de vendor
+  fora de pontos isolados e condicionados a `connection.vendor`).
+- MUST: PRAGMAs/WAL aplicados somente quando `connection.vendor == 'sqlite'`.
+- MUST: Manter um único worker sequencial de monitoramento.
+- MUST NOT: Usar SQLite como banco de produção.
+- MUST NOT: Introduzir um segundo banco servidor (MySQL, MongoDB etc.) além do PostgreSQL.
 
-### V. Notificações via Evolution API (WhatsApp) e SMTP
+### V. Notificações via Telegram, Evolution API (WhatsApp) e SMTP
 
-O canal de notificação WhatsApp DEVE usar exclusivamente a Evolution API self-hosted. E-mail DEVE
-usar `django.core.mail` com backend SMTP configurável.
+O Telegram É o canal principal de comunicação com usuários, tanto para comandos (autoatendimento)
+quanto para alertas. WhatsApp via Evolution API self-hosted e e-mail via `django.core.mail`
+(SMTP) permanecem como canais opcionais.
 
-- MUST: Implementar canais como classes em `notifications/channels/` com interface comum.
-- MUST NOT: Usar qualquer outro provedor de mensageria fora da Evolution API.
+- MUST: Chamar a Telegram Bot API por HTTP com stdlib (`urllib`), sem SDK de terceiros.
+- MUST: Validar o webhook do Telegram pelo header `X-Telegram-Bot-Api-Secret-Token` e tratar
+  updates de forma idempotente (`update_id`).
+- MUST: Implementar canais em `notifications/channels/` com interface comum
+  (`(status, error)`).
+- MUST NOT: Usar provedor de WhatsApp diferente da Evolution API.
 - MUST NOT: Adicionar dependências de SDK proprietário para envio de mensagens.
 - SHOULD: Registrar cada tentativa de envio em `NotificationAttempt` para rastreabilidade.
 
@@ -139,6 +184,9 @@ adicionar.
 - MUST NOT: Mensageria pesada (Kafka, RabbitMQ, SQS) ou múltiplos workers.
 - MUST NOT: GraphQL, REST API pública, ou camada BFF enquanto não houver cliente externo.
 - MUST: Justificar por escrito qualquer nova dependência Python antes de adicioná-la ao projeto.
+  - `psycopg[binary]` (v3): driver PostgreSQL oficialmente suportado pelo Django; não há
+    alternativa em stdlib. A URL do banco é parseada com `urllib.parse` para evitar
+    `dj-database-url`.
 
 ## Tech Stack Canônico
 
@@ -147,7 +195,9 @@ Esta stack É o contrato de implementação. Desvios MUST ser aprovados via emen
 | Camada    | Tecnologia                      | Restrição                           |
 | --------- | ------------------------------- | ----------------------------------- |
 | Backend   | Django 5.x                      | Monolito, sem DRF obrigatório       |
-| Banco     | SQLite (WAL)                    | Volume Docker; sem servidor externo |
+| Banco     | PostgreSQL 18 (Render)          | Via `DATABASE_URL`; driver psycopg3 |
+| Banco dev | SQLite (WAL)                    | Somente dev/testes                  |
+| Telegram  | Telegram Bot API (webhook)      | Canal principal; HTTP via stdlib    |
 | Frontend  | Django Templates + CSS próprio  | Sem frameworks JS                   |
 | Worker    | `run_worker` management command | Loop com sleep; sem Celery          |
 | WSGI      | Gunicorn 1 worker 2 threads     | Sem uvicorn/asgi em prod            |
@@ -185,4 +235,4 @@ de código, READMEs parciais e decisões verbais.
 **Compliance**: Todo plano de feature DEVE incluir uma seção "Constitution Check" verificando
 alinhamento com os Princípios I–VIII antes de iniciar implementação.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-22
+**Version**: 2.0.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-22
