@@ -56,9 +56,14 @@ Thumbs.db
 # Volumes montados não devem ficar no repo
 data/*.sqlite3*
 data/evolution/
+data/evolution-postgres/
+data/evolution-redis/
+
+# Artefatos gerados pela Evolution API dentro de logs/ (ex.: routers/controllers
+# copiados do container) não são código do projeto e não devem ser versionados.
+logs/*.js
 
 # ---------------------------------------------------------------------------
-# Node.js (wa-bot legado)
+# Node.js
 # ---------------------------------------------------------------------------
 node_modules/
-wa-bot/node_modules/

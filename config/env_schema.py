@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import os
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+INSECURE_SECRET_KEY_DEFAULT = 'django-insecure-troque-antes-de-colocar-em-producao'
 
 
 class EnvSettings(BaseModel):
@@ -23,7 +25,7 @@ class EnvSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # Core
-    secret_key: str = 'django-insecure-troque-antes-de-colocar-em-producao'
+    secret_key: str = INSECURE_SECRET_KEY_DEFAULT
     debug: bool = False
     allowed_hosts: list[str] = ['localhost', '127.0.0.1']
 
@@ -97,6 +99,21 @@ class EnvSettings(BaseModel):
     @classmethod
     def _uppercase_log_level(cls, value: str) -> str:
         return value.upper()
+
+    @model_validator(mode='after')
+    def _require_secure_secret_key_in_production(self) -> 'EnvSettings':
+        """
+        Falha rápido se a aplicação for subir em produção (DEBUG=false) sem uma
+        SECRET_KEY própria. Sem isso, o Django aceitaria silenciosamente o valor
+        padrão de exemplo (conhecido publicamente) como chave de produção.
+        """
+        if not self.debug and (not self.secret_key or self.secret_key == INSECURE_SECRET_KEY_DEFAULT):
+            raise ValueError(
+                'SECRET_KEY insegura ou não definida com DEBUG=false. '
+                'Defina uma SECRET_KEY própria e aleatória no .env antes de subir em produção '
+                '(gere uma com: python -c "import secrets; print(secrets.token_urlsafe(50))").'
+            )
+        return self
 
     @classmethod
     def from_env(cls, base_dir=None) -> 'EnvSettings':

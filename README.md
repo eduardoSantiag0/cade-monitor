@@ -8,13 +8,17 @@ relevante no texto extraído de uma página pública.
 > anteriores e registra mudanças. Não acessa dados privados, não burla autenticação e não
 > modifica nenhuma informação.
 
+Este projeto segue o workflow de [Spec Kit](https://github.com/github/spec-kit) (Spec-Driven
+Development) — specs, planos e tarefas de cada feature ficam em `specs/`, e os princípios
+arquiteturais do projeto ficam documentados em `.specify/memory/constitution.md`.
+
 ---
 
 ## Stack
 
 | Camada    | Tecnologia                     |
 | --------- | ------------------------------ |
-| Backend   | Django                         |
+| Backend   | Django 5.x                     |
 | Banco     | SQLite (WAL mode)              |
 | Interface | Django templates + CSS próprio |
 | Admin     | Django Admin                   |
@@ -39,7 +43,7 @@ pip install -r requirements.txt
 
 # 3. Configure o ambiente
 cp .env.example .env
-# Edite .env se necessário
+# Edite .env com valores reais (nunca comite o .env)
 
 # 4. Aplique as migrations e crie o superusuário
 python manage.py migrate
@@ -66,6 +70,9 @@ docker compose up -d --build
 docker compose exec web python manage.py migrate
 docker compose exec web python manage.py createsuperuser
 ```
+
+Os serviços `web`, `worker` e `scheduler` compartilham a mesma imagem (`Dockerfile`); veja
+`docker-compose.yml` para o papel de cada um e para o serviço opcional `evolution-api`.
 
 ---
 
@@ -98,6 +105,9 @@ python manage.py generate_daily_digest --hours 48 --dry-run
 # Limpeza de snapshots antigos
 python manage.py cleanup_snapshots
 python manage.py cleanup_snapshots --keep 50 --dry-run
+
+# Backup do SQLite
+python manage.py backup_db --dest backups --keep 7
 ```
 
 ---
@@ -115,33 +125,86 @@ apps/
 templates/       ← HTML templates Django
 static/css/      ← CSS próprio
 tests/           ← testes automatizados
+specs/           ← specs, planos e tarefas (Spec Kit)
 ```
 
 ---
 
 ## Páginas públicas suportadas
 
-O sistema aceita dois formatos de fonte:
+O sistema aceita dois formatos de fonte ao cadastrar um processo:
 
-1. **URL pública direta** — qualquer `http://` ou `https://` acessível publicamente
-2. **Número de protocolo CADE/SEI** — ex: `08700.005905/2026-38`
+1. **URL pública direta** — idealmente o link final de exibição do processo
+   (`md_pesq_processo_exibir.php?...`), que é o formato mais estável para monitorar.
+2. **Número de protocolo CADE/SEI** — ex: `08700.005905/2026-38`. Nesse caso o sistema envia uma
+   consulta pública à página de pesquisa do SEI e segue automaticamente o primeiro link de
+   resultado para resolver a URL de detalhe.
 
-Quando fornecido o número, o sistema consulta a pesquisa pública do SEI e resolve
-automaticamente para a URL de detalhe do processo.
+A página de pesquisa pública do CADE/SEI fica em:
+
+```
+https://sei.cade.gov.br/sei/modulos/pesquisa/md_pesq_processo_pesquisar.php?acao_externa=protocolo_pesquisar&acao_origem_externa=protocolo_pesquisar&id_orgao_acesso_externo=0
+```
+
+A página de detalhe de um processo público normalmente contém uma "Lista de Protocolos" e uma
+"Lista de Andamentos" — é o texto dessas seções que o monitor compara entre leituras.
+
+---
+
+## Cadastrar um processo
+
+No painel:
+
+1. Informe um rótulo interno para identificar o processo.
+2. Cole o link final público do processo ou informe o número de protocolo.
+3. Cadastre assinantes (e-mail e, se o WhatsApp estiver configurado, telefone em formato
+   internacional) e vincule-os ao processo.
+4. Clique em "Checar agora" para gravar a primeira leitura (linha de base) — a partir da próxima
+   mudança detectada, os alertas são enviados aos assinantes vinculados.
 
 ---
 
 ## Variáveis de ambiente
 
-Veja `.env.example` para a lista completa com comentários.
-Variáveis obrigatórias em produção:
+Veja `.env.example` para a lista completa com comentários. Variáveis obrigatórias em produção:
 
 | Variável        | Descrição                                                                              |
-| --------------- | -------------------------------------------------------------------------------------- |
-| `SECRET_KEY`    | Chave Django — gere com `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| --------------- | -----------------------------------------------------------------------------------------|
+| `SECRET_KEY`    | Chave Django — gere com `python -c "import secrets; print(secrets.token_urlsafe(50))"`. Obrigatória e validada: a aplicação recusa iniciar com `DEBUG=false` sem uma chave própria. |
 | `ALLOWED_HOSTS` | Domínios permitidos, separados por vírgula                                             |
 | `SQLITE_PATH`   | Caminho do banco SQLite (use volume Docker persistente)                                |
 | `DEBUG`         | `false` em produção                                                                    |
+
+### E-mail (SMTP)
+
+```
+SMTP_ENABLED=true
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=usuario@example.com
+SMTP_PASSWORD=senha-ou-app-password
+MAIL_FROM=usuario@example.com
+SMTP_TLS=true
+```
+
+Sem SMTP habilitado, o backend de console do Django é usado em desenvolvimento — o e-mail aparece
+no terminal em vez de ser enviado de verdade.
+
+### WhatsApp (Evolution API)
+
+O único provider de WhatsApp deste projeto é a [Evolution API](https://doc.evolution-api.com/)
+self-hosted.
+
+```
+EVOLUTION_ENABLED=true
+EVOLUTION_API_BASE_URL=http://localhost:8080
+EVOLUTION_API_KEY=sua_chave
+EVOLUTION_INSTANCE_NAME=cade-monitor
+```
+
+Se a Evolution API retornar erro de envio ou a instância estiver desconectada, a falha fica
+registrada em `Notification`/`NotificationAttempt` e é reprocessada automaticamente nos próximos
+ciclos, até o limite de `MAX_NOTIFICATION_ATTEMPTS`.
 
 ---
 
@@ -154,149 +217,15 @@ python manage.py test tests --verbosity=2
 
 ---
 
-## Notas de segurança
+## Cuidados de produção
 
-- Não versione o arquivo `.env`
-- Troque a `SECRET_KEY` antes de qualquer deploy
-- Use HTTPS em produção (Nginx/Caddy na frente do Gunicorn)
-- O painel exige autenticação Django em todas as rotas
-
-Importante: voce colou credenciais de servidor na conversa. Troque essa senha no painel da hospedagem antes de colocar qualquer monitor em producao. Este projeto nao salva senha SSH e nao precisa dela no arquivo .env.
-
-## Como funciona
-
-- O painel web cadastra processos, URLs publicas ou numeros de processo/protocolo, e-mails e telefones.
-- O worker consulta as paginas em intervalos curtos, por padrao 30 segundos.
-- Na primeira leitura, o sistema grava uma linha de base e nao notifica.
-- Nas leituras seguintes, se o texto publico extraido mudar, ele registra a movimentacao e dispara alertas.
-- E-mail usa SMTP configurado por variaveis de ambiente.
-- WhatsApp e opcional via Evolution API.
-
-Nao existe push se a fonte e apenas uma pagina publica. O comportamento mais rapido e seguro e polling curto. Para algo realmente instantaneo, seria necessario um webhook/API oficial do orgao ou acesso a uma fonte que publique eventos em tempo real.
-
-## Fonte CADE suportada
-
-A pagina de pesquisa publica do CADE fica em:
-
-    https://sei.cade.gov.br/sei/modulos/pesquisa/md_pesq_processo_pesquisar.php?acao_externa=protocolo_pesquisar&acao_origem_externa=protocolo_pesquisar&id_orgao_acesso_externo=0
-
-O app aceita dois formatos no cadastro:
-
-- Link final de exibicao do processo, como md_pesq_processo_exibir.php. Este e o melhor formato para monitorar.
-- Numero do processo/protocolo, como 08700.005905/2026-38. Nesse caso o app envia uma consulta publica usando o campo txtProtocoloPesquisa e segue automaticamente o primeiro link Acessar para monitorar a pagina final.
-
-Exemplo validado visualmente:
-
-    Processo: 08700.005905/2026-38
-    Link: https://sei.cade.gov.br/sei/modulos/pesquisa/md_pesq_processo_exibir.php?1MQnTNkPQ_sX_bghfgNtnzTLgP9Ehbk5UOJvmzyesnbE-Rf6Pd6hBcedDS_xdwMQMK6_PgwPd2GFLljH0OLyFWycTBhjBauP5dYFoUnRg02-3_TzC1t4QnSL57ciD1Ce
-
-Nesse exemplo, a pagina contem Lista de Protocolos e Lista de Andamentos. O monitor compara o texto dessas areas dentro da pagina publica.
-
-## Estrutura
-
-    cademon/                aplicacao Python
-    data/                   banco SQLite em producao local
-    logs/                   logs dos processos
-    scripts/                scripts simples para manter web e worker ativos
-    tests/                  testes locais
-    .env.example            modelo de configuracao
-
-O MVP usa somente a biblioteca padrao do Python, para facilitar uso em servidor compartilhado.
-
-## Rodar localmente no Windows
-
-Na pasta do projeto:
-
-    python -m venv .venv
-    .venv\Scripts\activate
-    copy .env.example .env
-    python -m cademon init
-    python -m cademon serve --host 127.0.0.1 --port 8000
-
-Em outro terminal:
-
-    .venv\Scripts\activate
-    python -m cademon worker
-
-Abra http://127.0.0.1:8000 e entre com ADMIN_USER e ADMIN_PASSWORD configurados no .env.
-
-## Rodar no Linux ou Whatbox
-
-    cd ~/apps/cade-monitor
-    python3 -m venv .venv
-    . .venv/bin/activate
-    cp .env.example .env
-    nano .env
-    python -m cademon init
-    python -m cademon serve --host 0.0.0.0 --port 8000
-
-Em outro terminal:
-
-    cd ~/apps/cade-monitor
-    . .venv/bin/activate
-    python -m cademon worker
-
-A configuracao exata de porta publica ou proxy depende do painel da hospedagem. Se ela oferecer Passenger, reverse proxy ou app manager, aponte para o comando python -m cademon serve.
-
-## Manter rodando com cron
-
-Depois de testar manualmente, adicione no cron do servidor:
-
-    * * * * * cd /home/SEU_USUARIO/apps/cade-monitor && sh scripts/keepalive_worker.sh
-    * * * * * cd /home/SEU_USUARIO/apps/cade-monitor && HOST=0.0.0.0 PORT=8000 sh scripts/keepalive_web.sh
-
-## Configurar e-mail
-
-Use um provedor SMTP confiavel, por exemplo SMTP2GO, Mailgun, SendGrid, Amazon SES, Gmail com app password, ou o SMTP do seu dominio.
-
-Campos principais no .env:
-
-    SMTP_HOST=smtp.example.com
-    SMTP_PORT=587
-    SMTP_USER=usuario@example.com
-    SMTP_PASSWORD=senha-ou-app-password
-    MAIL_FROM=usuario@example.com
-    SMTP_TLS=true
-
-Sem SMTP configurado, a movimentacao fica registrada, mas a notificacao de e-mail aparece como skipped no banco.
-
-## Configurar WhatsApp
-
-O provider de WhatsApp deste projeto e exclusivamente a Evolution API.
-
-Variaveis no .env:
-
-    EVOLUTION_ENABLED=true
-    EVOLUTION_API_BASE_URL=http://localhost:8080
-    EVOLUTION_API_KEY=sua_chave
-    EVOLUTION_INSTANCE_NAME=cade-monitor
-
-Se a Evolution API retornar erro de envio ou instancia desconectada, o app registra a falha em notifications.
-
-## Cadastrar um processo
-
-No painel:
-
-1. Informe um nome interno.
-2. Cole o link final publico do processo ou informe o numero, por exemplo 08700.005905/2026-38.
-3. Informe e-mails e, se houver provedor configurado, telefones em formato internacional.
-4. Clique em Cadastrar.
-5. Clique em Checar para gravar a primeira leitura. A partir da proxima mudanca, o alerta e enviado.
-
-## Cuidados de producao
-
-- Use HTTPS no painel web.
-- Troque ADMIN_PASSWORD e APP_SECRET_KEY.
-- Use intervalos responsaveis. Muitas URLs em 10 segundos podem sobrecarregar paginas publicas.
-- Prefira cadastrar o link final md_pesq_processo_exibir.php quando possivel.
-- Valide a pagina oficial antes de tratar o alerta como prova processual.
-- Monitore logs/worker.log e logs/web.log.
-- Guarde backups do arquivo data/cade-monitor.sqlite3.
-
-## Comandos uteis
-
-    python -m cademon probe --url "https://pagina-publica"
-    python -m cademon probe --url "08700.005905/2026-38"
-    python -m cademon list
-    python -m cademon check --id 1
-    python -m unittest discover -s tests
+- Nunca versione o arquivo `.env`.
+- Gere uma `SECRET_KEY` própria antes de qualquer deploy — a aplicação recusa subir sem isso em
+  produção.
+- Use HTTPS em produção (reverse proxy como Nginx/Caddy na frente do Gunicorn).
+- O painel exige autenticação Django em todas as rotas.
+- Respeite intervalos de checagem responsáveis (mínimo de 25 minutos por processo, ver
+  `.specify/memory/constitution.md`) — o sistema consulta páginas públicas de terceiros.
+- Valide a página oficial antes de tratar qualquer alerta como prova processual.
+- Monitore `logs/cade-monitor.log` e faça backup regular do banco SQLite
+  (`python manage.py backup_db`).
