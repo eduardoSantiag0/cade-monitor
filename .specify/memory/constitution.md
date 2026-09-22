@@ -1,5 +1,28 @@
 <!--
   SYNC IMPACT REPORT
+  Version change: 2.0.0 → 2.1.0 (MINOR)
+
+  Modified principles:
+    - V. Notificações via Telegram, Evolution API (WhatsApp) e SMTP — nova regra: o nome e o
+      @username reais do bot do Telegram nunca são publicados (repositório, docs, testes,
+      commits, PRs). Só existem em variáveis de ambiente.
+  Modified sections: Development Workflow (item 4 cita a regra).
+  Added sections: None
+  Removed sections: None
+  Rationale: Pedido explícito do dono do projeto: o bot não deve ser descobrível a partir do
+    repositório público. As ocorrências atuais foram trocadas por placeholders (README:
+    `NomeDoBot`; testes: `ExemploBot`).
+  Templates requiring updates:
+    ✅ .specify/memory/constitution.md — this file
+    ✅ .specify/templates/*.md — sem mudanças (regra de conteúdo, não de estrutura)
+    ✅ README.md, tests/ — placeholders aplicados
+    ⚠ Histórico do Git — commits antigos ainda contêm o nome; reescrever o histórico exige
+      decisão do dono (force push)
+  Deferred TODOs: None
+-->
+
+<!--
+  SYNC IMPACT REPORT (histórico)
   Version change: 1.1.0 → 2.0.0 (MAJOR)
 
   Modified principles:
@@ -146,6 +169,11 @@ quanto para alertas. WhatsApp via Evolution API self-hosted e e-mail via `django
   updates de forma idempotente (`update_id`).
 - MUST: Implementar canais em `notifications/channels/` com interface comum
   (`(status, error)`).
+- MUST NOT: Publicar o nome ou o @username reais do bot do Telegram em qualquer lugar versionado
+  ou público (código, testes, README, specs, mensagens de commit, PRs, issues). Use
+  placeholders neutros (`NomeDoBot` em documentação, `ExemploBot` em testes). O valor real
+  existe apenas em variável de ambiente (`TELEGRAM_BOT_USERNAME`), junto com o token.
+  Rationale: o bot não deve ser descobrível a partir do repositório público.
 - MUST NOT: Usar provedor de WhatsApp diferente da Evolution API.
 - MUST NOT: Adicionar dependências de SDK proprietário para envio de mensagens.
 - SHOULD: Registrar cada tentativa de envio em `NotificationAttempt` para rastreabilidade.
@@ -212,7 +240,8 @@ Esta stack É o contrato de implementação. Desvios MUST ser aprovados via emen
 2. **Novos services** MUST ter ao menos um teste unitário cobrindo o caminho feliz e um caso de
    erro.
 3. **Scrapers/extractors** MUST ser testados com fixtures HTML locais (sem HTTP ao testar).
-4. **Variáveis de ambiente** MUST ser documentadas no `.env.example`; nunca hardcoded.
+4. **Variáveis de ambiente** MUST ser documentadas no `.env.example` com placeholders; nunca hardcoded.
+   Valores de produção (credenciais, token e nome/@username do bot) nunca entram no repositório.
 5. **Commits** SHOULD seguir Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`).
 6. **Constitution Check** MUST ser executado mentalmente antes de qualquer novo serviço,
    dependência, ou decisão arquitetural.
@@ -235,4 +264,4 @@ de código, READMEs parciais e decisões verbais.
 **Compliance**: Todo plano de feature DEVE incluir uma seção "Constitution Check" verificando
 alinhamento com os Princípios I–VIII antes de iniciar implementação.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-22
+**Version**: 2.1.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-22

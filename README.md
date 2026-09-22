@@ -3,7 +3,6 @@
 **Acompanhe processos públicos do CADE pelo Telegram.** Mande o número do processo para o bot
 e receba um aviso, com o documento anexado, sempre que surgir uma movimentação nova no SEI.
 
-
 ```
 /watch 08700.005905/2026-38
 ```

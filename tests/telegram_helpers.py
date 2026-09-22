@@ -6,7 +6,7 @@ from django.test import override_settings
 from apps.telegram_bot.client import TelegramResult
 
 SECRET = 'segredo-de-teste-1234567890'
-BOT = 'ExemploBot'
+BOT = 'ExemploBot'  # fictício: o nome real do bot nunca vai para o repositório (constituição, V)
 PROC = '08700.005905/2026-38'
 
 telegram_settings = override_settings(
