@@ -12,7 +12,12 @@ from apps.monitoring.models import CheckRun, DetectedChange
 from .forms import ProcessForm
 from .models import MonitoredProcess, ProcessStatus
 from .selectors import get_all_processes, get_filtered_processes
-from .services import create_process, update_process_status
+from .services import (
+    ManualDispatchChannel,
+    create_process,
+    dispatch_manual_notifications,
+    update_process_status,
+)
 
 
 def _format_process_last_update(process: MonitoredProcess) -> str:
@@ -160,29 +165,21 @@ def process_send_test_email(request, pk):
         channel='email',
     )
 
-    sent_email = 0
-    failed_email = 0
-    failure_details: list[str] = []
-
-    for subscription in subscriptions:
-        subscriber = subscription.subscriber
-        if not subscriber.is_reachable():
-            continue
-
-        # Mantém o teste de e-mail alinhado ao teste de WhatsApp: basta o
-        # assinante ter o canal global ativo e endereço válido.
-        if subscriber.email_enabled and subscriber.email:
-            status, error = send_email_notification(
-                to_address=subscriber.email,
-                subject=subject,
-                body=template_body,
-            )
-            if status == 'sent':
-                sent_email += 1
-            else:
-                failed_email += 1
-                if error:
-                    failure_details.append(f'{subscriber.name}: {error}')
+    # Mantém o teste de e-mail alinhado ao teste de WhatsApp: basta o
+    # assinante ter o canal global ativo e endereço válido (não exige o
+    # toggle por processo, diferente do aviso manual).
+    stats = dispatch_manual_notifications(subscriptions, [
+        ManualDispatchChannel(
+            name='email',
+            is_eligible=lambda sub: sub.subscriber.email_enabled and bool(sub.subscriber.email),
+            send=lambda subscriber: send_email_notification(
+                to_address=subscriber.email, subject=subject, body=template_body,
+            ),
+        ),
+    ])
+    sent_email = stats['email']['sent']
+    failed_email = stats['email']['failed']
+    failure_details = stats['email']['failure_details']
 
     if (sent_email + failed_email) == 0:
         messages.warning(
@@ -214,11 +211,6 @@ def process_notify_subscribers(request, pk):
     from apps.notifications.channels.email import send_email_notification
     from apps.notifications.channels.evolution import send_whatsapp_notification
 
-    sent_email = 0
-    sent_whatsapp = 0
-    failed_email = 0
-    failed_whatsapp = 0
-
     subject = f'[CADE Monitor] Aviso manual: {process.label}'[:180]
     last_update_text = _format_process_last_update(process)
     email_body = (
@@ -236,36 +228,29 @@ def process_notify_subscribers(request, pk):
         '✅ Se recebeu este aviso, suas preferencias de notificacao estao ativas.'
     )
 
-    for subscription in subscriptions:
-        subscriber = subscription.subscriber
-        if not subscriber.is_reachable():
-            continue
-
-        if subscription.email_enabled and subscriber.email_enabled and subscriber.email:
-            status, _error = send_email_notification(
-                to_address=subscriber.email,
-                subject=subject,
-                body=email_body,
-            )
-            if status == 'sent':
-                sent_email += 1
-            else:
-                failed_email += 1
-
-        if (
-            settings.EVOLUTION_ENABLED
-            and subscription.whatsapp_enabled
-            and subscriber.whatsapp_enabled
-            and subscriber.phone
-        ):
-            status, _error = send_whatsapp_notification(
-                phone=subscriber.phone,
-                body=whatsapp_body,
-            )
-            if status == 'sent':
-                sent_whatsapp += 1
-            else:
-                failed_whatsapp += 1
+    stats = dispatch_manual_notifications(subscriptions, [
+        ManualDispatchChannel(
+            name='email',
+            is_eligible=lambda sub: sub.email_enabled and sub.subscriber.email_enabled and bool(sub.subscriber.email),
+            send=lambda subscriber: send_email_notification(
+                to_address=subscriber.email, subject=subject, body=email_body,
+            ),
+        ),
+        ManualDispatchChannel(
+            name='whatsapp',
+            is_eligible=lambda sub: (
+                settings.EVOLUTION_ENABLED
+                and sub.whatsapp_enabled
+                and sub.subscriber.whatsapp_enabled
+                and bool(sub.subscriber.phone)
+            ),
+            send=lambda subscriber: send_whatsapp_notification(phone=subscriber.phone, body=whatsapp_body),
+        ),
+    ])
+    sent_email = stats['email']['sent']
+    failed_email = stats['email']['failed']
+    sent_whatsapp = stats['whatsapp']['sent']
+    failed_whatsapp = stats['whatsapp']['failed']
 
     if (sent_email + sent_whatsapp + failed_email + failed_whatsapp) == 0:
         messages.warning(
@@ -301,30 +286,20 @@ def process_send_test_whatsapp(request, pk):
         channel='whatsapp',
     )
 
-    sent_whatsapp = 0
-    failed_whatsapp = 0
-    failure_details: list[str] = []
-
-    for subscription in subscriptions:
-        subscriber = subscription.subscriber
-        if not subscriber.is_reachable():
-            continue
-
-        if (
-            settings.EVOLUTION_ENABLED
-            and subscriber.whatsapp_enabled
-            and subscriber.phone
-        ):
-            status, _error = send_whatsapp_notification(
-                phone=subscriber.phone,
-                body=template_body,
-            )
-            if status == 'sent':
-                sent_whatsapp += 1
-            else:
-                failed_whatsapp += 1
-                if _error:
-                    failure_details.append(f'{subscriber.name}: {_error}')
+    # Igual ao teste de e-mail: basta o toggle global do assinante, sem
+    # exigir o toggle por processo.
+    stats = dispatch_manual_notifications(subscriptions, [
+        ManualDispatchChannel(
+            name='whatsapp',
+            is_eligible=lambda sub: (
+                settings.EVOLUTION_ENABLED and sub.subscriber.whatsapp_enabled and bool(sub.subscriber.phone)
+            ),
+            send=lambda subscriber: send_whatsapp_notification(phone=subscriber.phone, body=template_body),
+        ),
+    ])
+    sent_whatsapp = stats['whatsapp']['sent']
+    failed_whatsapp = stats['whatsapp']['failed']
+    failure_details = stats['whatsapp']['failure_details']
 
     if (sent_whatsapp + failed_whatsapp) == 0:
         messages.warning(
@@ -457,54 +432,43 @@ def process_send_latest_update(request, pk):
         f'🕒 Detectado em: {detected_at}'
     )
 
-    sent_email = 0
-    sent_whatsapp = 0
-    failed_email = 0
-    failed_whatsapp = 0
+    def _send_whatsapp_with_attachment(subscriber) -> tuple[str, str | None]:
+        """Envia a mensagem principal e, se houver PDF, o anexo em seguida —
+        conta como uma tentativa só por assinante, resultado do último passo."""
+        status, error = send_whatsapp_notification(phone=subscriber.phone, body=whatsapp_body)
+        if status != 'sent':
+            return status, error
+        if not first_doc_url:
+            return 'sent', None
+        return send_whatsapp_attachment(
+            phone=subscriber.phone,
+            media_url=first_doc_url,
+            file_name=(first_doc_label or 'documento')[:140],
+        )
 
-    for subscription in subscriptions:
-        subscriber = subscription.subscriber
-        if not subscriber.is_reachable():
-            continue
-
-        if subscription.email_enabled and subscriber.email_enabled and subscriber.email:
-            status, _error = send_email_notification(
-                to_address=subscriber.email,
-                subject=subject,
-                body=email_body,
-                attachments=email_attachments,
-            )
-            if status == 'sent':
-                sent_email += 1
-            else:
-                failed_email += 1
-
-        if (
-            settings.EVOLUTION_ENABLED
-            and subscription.whatsapp_enabled
-            and subscriber.whatsapp_enabled
-            and subscriber.phone
-        ):
-            status, _error = send_whatsapp_notification(
-                phone=subscriber.phone,
-                body=whatsapp_body,
-            )
-            if status != 'sent':
-                failed_whatsapp += 1
-                continue
-
-            if first_doc_url:
-                media_status, _media_error = send_whatsapp_attachment(
-                    phone=subscriber.phone,
-                    media_url=first_doc_url,
-                    file_name=(first_doc_label or 'documento')[:140],
-                )
-                if media_status == 'sent':
-                    sent_whatsapp += 1
-                else:
-                    failed_whatsapp += 1
-            else:
-                sent_whatsapp += 1
+    stats = dispatch_manual_notifications(subscriptions, [
+        ManualDispatchChannel(
+            name='email',
+            is_eligible=lambda sub: sub.email_enabled and sub.subscriber.email_enabled and bool(sub.subscriber.email),
+            send=lambda subscriber: send_email_notification(
+                to_address=subscriber.email, subject=subject, body=email_body, attachments=email_attachments,
+            ),
+        ),
+        ManualDispatchChannel(
+            name='whatsapp',
+            is_eligible=lambda sub: (
+                settings.EVOLUTION_ENABLED
+                and sub.whatsapp_enabled
+                and sub.subscriber.whatsapp_enabled
+                and bool(sub.subscriber.phone)
+            ),
+            send=_send_whatsapp_with_attachment,
+        ),
+    ])
+    sent_email = stats['email']['sent']
+    failed_email = stats['email']['failed']
+    sent_whatsapp = stats['whatsapp']['sent']
+    failed_whatsapp = stats['whatsapp']['failed']
 
     if (sent_email + sent_whatsapp + failed_email + failed_whatsapp) == 0:
         messages.warning(

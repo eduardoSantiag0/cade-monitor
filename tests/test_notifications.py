@@ -227,3 +227,79 @@ class NotificationAttachmentsFlowTest(TestCase):
         self.assertIn(result, (NotificationStatus.SENT, NotificationStatus.PENDING))
         state = NotificationDocumentState.objects.get(notification=notification, document=doc_zip)
         self.assertEqual(state.status, NotificationDocumentStatus.SENT)
+
+
+class AttachmentDownloadPerChannelTest(TestCase):
+    """
+    O canal WhatsApp só envia a URL pública do documento à Evolution API — o
+    conteúdo binário nunca é usado. O canal e-mail precisa dos bytes para
+    anexar à mensagem. `download_document` não deve ser chamado para o
+    canal WhatsApp (spec 002-repo-hardening-cleanup, FR-009).
+    """
+
+    def setUp(self):
+        self.process = _make_process(source='https://sei.cade.gov.br/test-attachment-channel')
+        self.change = _make_change(self.process)
+        self.document = DetectedDocument.objects.create(
+            change=self.change,
+            document_number='300001',
+            title='Parecer',
+            url='https://sei.cade.gov.br/doc/300001.pdf',
+            mode='attachment',
+            status='pending_retry',
+            retryable=True,
+        )
+
+    def _make_notification(self, channel, destination):
+        notification = Notification.objects.create(
+            change=self.change,
+            subscriber=Subscriber.objects.create(
+                name=f'Assinante {channel}',
+                email='canal@example.com' if channel == NotificationChannel.EMAIL else '',
+                phone='5511999998888' if channel == NotificationChannel.WHATSAPP else '',
+            ),
+            channel=channel,
+            destination=destination,
+            status=NotificationStatus.PENDING,
+        )
+        NotificationDocumentState.objects.get_or_create(
+            notification=notification,
+            document=self.document,
+            defaults={'status': NotificationDocumentStatus.PENDING},
+        )
+        return notification
+
+    @patch('apps.notifications.services.download_document')
+    @patch('apps.notifications.channels.evolution.send_whatsapp_attachment')
+    @patch('apps.notifications.channels.evolution.send_whatsapp_notification')
+    def test_whatsapp_channel_does_not_download_attachment(
+        self, mock_send_text, mock_send_media, mock_download_document,
+    ):
+        mock_send_text.return_value = (NotificationStatus.SENT, None)
+        mock_send_media.return_value = (NotificationStatus.SENT, None)
+
+        notification = self._make_notification(NotificationChannel.WHATSAPP, '5511999998888')
+        with self.settings(EVOLUTION_ENABLED=True):
+            dispatch_notification(notification)
+
+        mock_download_document.assert_not_called()
+        mock_send_media.assert_called_once()
+        self.assertEqual(mock_send_media.call_args.kwargs.get('media_url') or mock_send_media.call_args[1].get('media_url'), self.document.url)
+
+    @patch('apps.notifications.services.download_document')
+    @patch('apps.notifications.channels.email.send_email_notification')
+    def test_email_channel_still_downloads_attachment(self, mock_send_email, mock_download_document):
+        mock_send_email.return_value = (NotificationStatus.SENT, None)
+        mock_download_document.return_value = {
+            'document': '300001',
+            'title': 'Parecer',
+            'filename': '300001-parecer.pdf',
+            'content_type': 'application/pdf',
+            'content': b'pdf-content',
+            'url': self.document.url,
+        }
+
+        notification = self._make_notification(NotificationChannel.EMAIL, 'canal@example.com')
+        dispatch_notification(notification)
+
+        mock_download_document.assert_called_once()

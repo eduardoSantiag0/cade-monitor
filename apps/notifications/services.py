@@ -18,7 +18,7 @@ import logging
 from django.conf import settings
 from django.utils import timezone
 
-from apps.monitoring.clients import FetchError, download_document
+from apps.monitoring.clients import FetchError, _safe_document_filename, download_document
 from apps.monitoring.extractors import (
     new_movement_records,
     new_protocol_records,
@@ -324,6 +324,23 @@ def _prepare_attachments_for_channel(
         if not doc.url:
             _mark_state_pending(state, 'Documento sem link público para download no momento.')
             unresolved_docs.append({'document': doc.document_number, 'reason': state.last_error, 'url': ''})
+            continue
+
+        if notification.channel == NotificationChannel.WHATSAPP:
+            # A Evolution API recebe só a URL pública e busca o arquivo do lado
+            # dela — o conteúdo baixado aqui nunca seria usado, então não faz
+            # sentido gastar banda/memória baixando o documento inteiro só para
+            # descartar em seguida (spec 002-repo-hardening-cleanup, FR-009).
+            filename = _safe_document_filename(doc.document_number, doc.title, '', doc.url)
+            attachment_candidates.append({
+                'state': state,
+                'attachment': {
+                    'document': doc.document_number,
+                    'title': doc.title,
+                    'filename': filename,
+                    'url': doc.url,
+                },
+            })
             continue
 
         try:
