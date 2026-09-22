@@ -4,26 +4,27 @@ Configurações centrais do CADE Monitor.
 Variáveis sensíveis são lidas do .env (via python-dotenv).
 Nunca versione o arquivo .env com valores reais.
 """
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+from .env_schema import EnvSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Carrega .env antes de qualquer leitura de variável
 load_dotenv(BASE_DIR / '.env')
 
+# Valida e tipa todas as variáveis de ambiente usadas abaixo. Falha rápido
+# (na subida do processo) com uma mensagem clara se algum valor for inválido.
+env = EnvSettings.from_env(base_dir=BASE_DIR)
+
 # ---------------------------------------------------------------------------
 # Core
 # ---------------------------------------------------------------------------
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-troque-antes-de-colocar-em-producao')
-DEBUG = os.environ.get('DEBUG', 'false').lower() in ('1', 'true', 'yes')
-ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-    if h.strip()
-]
+SECRET_KEY = env.secret_key
+DEBUG = env.debug
+ALLOWED_HOSTS = env.allowed_hosts
 
 # ---------------------------------------------------------------------------
 # Aplicações
@@ -79,7 +80,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ---------------------------------------------------------------------------
 # Banco de dados — SQLite com WAL mode (ativado via signal em monitoring/apps.py)
 # ---------------------------------------------------------------------------
-SQLITE_PATH = os.environ.get('SQLITE_PATH', str(BASE_DIR / 'data' / 'cade-monitor.sqlite3'))
+SQLITE_PATH = env.sqlite_path
 
 DATABASES = {
     'default': {
@@ -112,7 +113,7 @@ LOGIN_REDIRECT_URL = '/'
 # Internacionalização
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE = 'pt-br'
-TIME_ZONE = os.environ.get('APP_TIMEZONE', 'America/Sao_Paulo')
+TIME_ZONE = env.app_timezone
 USE_I18N = True
 USE_TZ = True
 
@@ -130,52 +131,62 @@ if not DEBUG:
 # ---------------------------------------------------------------------------
 # E-mail
 # ---------------------------------------------------------------------------
-_smtp_enabled = os.environ.get('SMTP_ENABLED', 'false').lower() in ('1', 'true', 'yes')
 EMAIL_BACKEND = (
     'django.core.mail.backends.smtp.EmailBackend'
-    if _smtp_enabled
+    if env.smtp_enabled
     else 'django.core.mail.backends.console.EmailBackend'
 )
-EMAIL_HOST = os.environ.get('SMTP_HOST', '')
-EMAIL_PORT = int(os.environ.get('SMTP_PORT', '587'))
-EMAIL_HOST_USER = os.environ.get('SMTP_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('SMTP_PASSWORD', '')
-EMAIL_USE_TLS = os.environ.get('SMTP_TLS', 'true').lower() in ('1', 'true', 'yes')
-EMAIL_USE_SSL = os.environ.get('SMTP_SSL', 'false').lower() in ('1', 'true', 'yes')
-DEFAULT_FROM_EMAIL = os.environ.get('MAIL_FROM', 'cade-monitor@example.com')
+EMAIL_HOST = env.smtp_host
+EMAIL_PORT = env.smtp_port
+EMAIL_HOST_USER = env.smtp_user
+EMAIL_HOST_PASSWORD = env.smtp_password
+EMAIL_USE_TLS = env.smtp_tls
+EMAIL_USE_SSL = env.smtp_ssl
+DEFAULT_FROM_EMAIL = env.mail_from
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # ---------------------------------------------------------------------------
 # Evolution API (WhatsApp)
 # ---------------------------------------------------------------------------
-EVOLUTION_ENABLED = os.environ.get('EVOLUTION_ENABLED', 'false').lower() in ('1', 'true', 'yes')
-EVOLUTION_API_BASE_URL = os.environ.get('EVOLUTION_API_BASE_URL', '').rstrip('/')
+EVOLUTION_ENABLED = env.evolution_enabled
+EVOLUTION_API_BASE_URL = env.evolution_api_base_url
 # Evolution aceita chave global (AUTHENTICATION_API_KEY) ou token de instância.
-AUTHENTICATION_API_KEY = os.environ.get('AUTHENTICATION_API_KEY', '')
-EVOLUTION_API_KEY = AUTHENTICATION_API_KEY or os.environ.get('EVOLUTION_API_KEY', '')
-EVOLUTION_INSTANCE_NAME = os.environ.get('EVOLUTION_INSTANCE_NAME', 'cade-monitor')
-EVOLUTION_TIMEOUT_SECONDS = int(os.environ.get('EVOLUTION_TIMEOUT_SECONDS', '15'))
+AUTHENTICATION_API_KEY = env.authentication_api_key
+EVOLUTION_API_KEY = env.evolution_api_key
+EVOLUTION_INSTANCE_NAME = env.evolution_instance_name
+EVOLUTION_TIMEOUT_SECONDS = env.evolution_timeout_seconds
 
 # ---------------------------------------------------------------------------
 # Monitoramento
 # ---------------------------------------------------------------------------
 # Intervalo mínimo global; cada processo pode ter o seu próprio.
-CHECK_INTERVAL_SECONDS = max(1500, int(os.environ.get('CHECK_INTERVAL_SECONDS', '1500')))
-MAX_PROCESSES_PER_CYCLE = int(os.environ.get('MAX_PROCESSES_PER_CYCLE', '20'))
-REQUEST_TIMEOUT_SECONDS = int(os.environ.get('REQUEST_TIMEOUT_SECONDS', '15'))
-SLEEP_BETWEEN_REQUESTS_SECONDS = float(os.environ.get('SLEEP_BETWEEN_REQUESTS_SECONDS', '2'))
-WORKER_TICK_SECONDS = int(os.environ.get('WORKER_TICK_SECONDS', '5'))
-USER_AGENT = os.environ.get(
-    'USER_AGENT',
-    'CadeMonitor/1.0 (monitoramento-publico; contato: configure USER_AGENT no .env)',
-)
-MAX_SNAPSHOTS_PER_PROCESS = int(os.environ.get('MAX_SNAPSHOTS_PER_PROCESS', '100'))
-MAX_NOTIFICATION_ATTEMPTS = int(os.environ.get('MAX_NOTIFICATION_ATTEMPTS', '3'))
+CHECK_INTERVAL_SECONDS = env.check_interval_seconds
+MAX_PROCESSES_PER_CYCLE = env.max_processes_per_cycle
+REQUEST_TIMEOUT_SECONDS = env.request_timeout_seconds
+REQUEST_RETRY_ATTEMPTS = env.request_retry_attempts
+REQUEST_RETRY_BACKOFF_SECONDS = env.request_retry_backoff_seconds
+SLEEP_BETWEEN_REQUESTS_SECONDS = env.sleep_between_requests_seconds
+WORKER_TICK_SECONDS = env.worker_tick_seconds
+USER_AGENT = env.user_agent
+MAX_SNAPSHOTS_PER_PROCESS = env.max_snapshots_per_process
+MAX_NOTIFICATION_ATTEMPTS = env.max_notification_attempts
+DOCUMENT_DOWNLOAD_MAX_BYTES = env.document_download_max_bytes
+EMAIL_ATTACHMENT_MAX_BYTES = env.email_attachment_max_bytes
+WHATSAPP_ATTACHMENT_MAX_BYTES = env.whatsapp_attachment_max_bytes
+PROCESS_HASH_REDIS_ENABLED = env.process_hash_redis_enabled
+PROCESS_HASH_REDIS_URL = env.process_hash_redis_url
+PROCESS_HASH_REDIS_KEY_PREFIX = env.process_hash_redis_key_prefix
+# TTL mais longo reduz misses de cache sem gerar tráfego excessivo.
+PROCESS_HASH_REDIS_TTL_SECONDS = env.process_hash_redis_ttl_seconds
+# Renova com margem para evitar expiração durante períodos ativos.
+PROCESS_HASH_REDIS_RENEW_THRESHOLD_SECONDS = env.process_hash_redis_renew_threshold_seconds
+MIN_VALID_PAGE_TEXT_LENGTH = env.min_valid_page_text_length
+MIN_VALID_PAGE_SIZE_RATIO = env.min_valid_page_size_ratio
 
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = env.log_level
 
 LOGGING = {
     'version': 1,

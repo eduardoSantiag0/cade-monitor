@@ -14,6 +14,9 @@ import urllib.error
 import urllib.request
 
 from django.conf import settings
+from pydantic import ValidationError
+
+from ..schemas import EvolutionMediaPayload, EvolutionTextPayload
 
 logger = logging.getLogger(__name__)
 
@@ -34,30 +37,54 @@ def send_whatsapp_notification(phone: str, body: str) -> tuple[str, str | None]:
     if not settings.EVOLUTION_API_KEY:
         return 'channel_not_configured', 'Configure AUTHENTICATION_API_KEY ou EVOLUTION_API_KEY'
 
-    phone = _normalize_phone(phone)
-    if not phone:
+    try:
+        payload = EvolutionTextPayload(number=phone, text=body)
+    except ValidationError:
         return 'invalid_recipient', f'Número de telefone inválido: {phone!r}'
 
-    return _call_api(phone, body)
+    return _call_api(
+        endpoint=f'/message/sendText/{settings.EVOLUTION_INSTANCE_NAME}',
+        payload=payload.model_dump(),
+        phone=payload.number,
+    )
 
 
-def _normalize_phone(phone: str) -> str:
-    """Remove formatação do número, mantendo apenas dígitos."""
-    cleaned = phone.strip().replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
-    if not cleaned.isdigit() or len(cleaned) < 10:
-        return ''
-    return cleaned
+def send_whatsapp_attachment(phone: str, media_url: str, file_name: str) -> tuple[str, str | None]:
+    """
+    Envia anexo por WhatsApp sem texto adicional na mensagem do arquivo.
+    O texto explicativo deve ficar na mensagem principal, separada.
+    """
+    if not settings.EVOLUTION_ENABLED:
+        return 'channel_not_configured', 'Evolution API desabilitada (EVOLUTION_ENABLED=false)'
+    if not settings.EVOLUTION_API_BASE_URL:
+        return 'channel_not_configured', 'EVOLUTION_API_BASE_URL não configurado'
+    if not settings.EVOLUTION_API_KEY:
+        return 'channel_not_configured', 'Configure AUTHENTICATION_API_KEY ou EVOLUTION_API_KEY'
+
+    if not media_url:
+        return 'failed', 'URL do anexo não informada'
+
+    try:
+        payload = EvolutionMediaPayload(number=phone, media=media_url, fileName=file_name)
+    except ValidationError:
+        return 'invalid_recipient', 'Número de telefone inválido'
+
+    return _call_api(
+        endpoint=f'/message/sendMedia/{settings.EVOLUTION_INSTANCE_NAME}',
+        payload=payload.model_dump(),
+        phone=payload.number,
+    )
 
 
-def _call_api(phone: str, body: str) -> tuple[str, str | None]:
+def _call_api(endpoint: str, payload: dict[str, object], phone: str) -> tuple[str, str | None]:
     """Faz a chamada HTTP para a Evolution API e trata os erros conhecidos."""
     instance = settings.EVOLUTION_INSTANCE_NAME
-    url = f'{settings.EVOLUTION_API_BASE_URL}/message/sendText/{instance}'
+    url = f'{settings.EVOLUTION_API_BASE_URL}{endpoint}'
 
-    payload = json.dumps({'number': phone, 'text': body}).encode('utf-8')
+    payload_raw = json.dumps(payload).encode('utf-8')
     request = urllib.request.Request(
         url,
-        data=payload,
+        data=payload_raw,
         method='POST',
         headers={
             'Content-Type': 'application/json',

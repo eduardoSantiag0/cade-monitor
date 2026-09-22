@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.timezone import localtime
 from django.views.decorators.http import require_POST
 
+from apps.monitoring.extractors import extract_protocol_records
 from apps.monitoring.models import CheckRun, DetectedChange
 
 from .forms import ProcessForm
@@ -19,6 +20,34 @@ def _format_process_last_update(process: MonitoredProcess) -> str:
     if not last_update:
         return 'Nao disponivel'
     return localtime(last_update).strftime('%d/%m/%Y %H:%M')
+
+
+def _latest_protocol_record(change: DetectedChange) -> dict | None:
+    """Retorna o protocolo mais recente da lista do snapshot novo da mudança."""
+    snapshot_text = ''
+    if change.new_snapshot and change.new_snapshot.text_content:
+        snapshot_text = change.new_snapshot.text_content
+
+    return _latest_protocol_record_from_text(snapshot_text)
+
+
+def _latest_protocol_record_from_text(snapshot_text: str) -> dict | None:
+    """Retorna o protocolo mais recente da lista a partir de texto extraído."""
+    if not snapshot_text:
+        return None
+
+    records = extract_protocol_records(snapshot_text)
+    if not records:
+        return None
+
+    return max(
+        records,
+        key=lambda item: (
+            str(item.get('sort_key') or ''),
+            str(item.get('registry_date') or ''),
+            str(item.get('document') or ''),
+        ),
+    )
 
 
 @login_required
@@ -116,6 +145,67 @@ def process_check_now(request, pk):
 
 @login_required
 @require_POST
+def process_send_test_email(request, pk):
+    """Envia e-mail de teste para assinantes elegiveis do processo."""
+    process = get_object_or_404(MonitoredProcess, pk=pk)
+    subscriptions = process.subscriptions.select_related('subscriber').all()
+
+    from apps.notifications.channels.email import send_email_notification
+    from apps.notifications.services import build_test_notification_body
+
+    subject = f'[CADE Monitor] Teste de e-mail: {process.label}'[:180]
+    template_body = build_test_notification_body(
+        process_label=process.label,
+        process_url=process.effective_url,
+        channel='email',
+    )
+
+    sent_email = 0
+    failed_email = 0
+    failure_details: list[str] = []
+
+    for subscription in subscriptions:
+        subscriber = subscription.subscriber
+        if not subscriber.is_reachable():
+            continue
+
+        # Mantém o teste de e-mail alinhado ao teste de WhatsApp: basta o
+        # assinante ter o canal global ativo e endereço válido.
+        if subscriber.email_enabled and subscriber.email:
+            status, error = send_email_notification(
+                to_address=subscriber.email,
+                subject=subject,
+                body=template_body,
+            )
+            if status == 'sent':
+                sent_email += 1
+            else:
+                failed_email += 1
+                if error:
+                    failure_details.append(f'{subscriber.name}: {error}')
+
+    if (sent_email + failed_email) == 0:
+        messages.warning(
+            request,
+            'Nenhum assinante com e-mail habilitado neste processo para envio de teste.',
+        )
+    else:
+        detail = ''
+        if failure_details:
+            detail = f' Detalhes: {" | ".join(failure_details[:3])}'
+        messages.success(
+            request,
+            (
+                f'E-mail teste concluido. Enviados: {sent_email}. '
+                f'Falhas: {failed_email}.{detail}'
+            ),
+        )
+
+    return redirect('processes:detail', pk=pk)
+
+
+@login_required
+@require_POST
 def process_notify_subscribers(request, pk):
     """Envia aviso manual para assinantes do processo conforme preferências por canal."""
     process = get_object_or_404(MonitoredProcess, pk=pk)
@@ -203,15 +293,12 @@ def process_send_test_whatsapp(request, pk):
     subscriptions = process.subscriptions.select_related('subscriber').all()
 
     from apps.notifications.channels.evolution import send_whatsapp_notification
+    from apps.notifications.services import build_test_notification_body
 
-    last_update_text = _format_process_last_update(process)
-    template_body = (
-        '🧪 *Teste de WhatsApp - CADE Monitor*\n\n'
-        'Este e um envio de teste feito pela tela de detalhes do processo.\n\n'
-        f'📁 *Processo:* {process.label}\n'
-        f'🔗 *Link do processo:* {process.effective_url}\n'
-        f'🕒 *Ultima atualizacao:* {last_update_text}\n\n'
-        '✅ Se recebeu esta mensagem, o canal de WhatsApp esta funcionando.'
+    template_body = build_test_notification_body(
+        process_label=process.label,
+        process_url=process.effective_url,
+        channel='whatsapp',
     )
 
     sent_whatsapp = 0
@@ -253,6 +340,184 @@ def process_send_test_whatsapp(request, pk):
             (
                 f'WhatsApp teste concluido. Enviados: {sent_whatsapp}. '
                 f'Falhas: {failed_whatsapp}.{detail}'
+            ),
+        )
+
+    return redirect('processes:detail', pk=pk)
+
+
+@login_required
+@require_POST
+def process_send_latest_update(request, pk):
+    """Envia a última atualização detectada para assinantes elegíveis do processo."""
+    process = get_object_or_404(MonitoredProcess, pk=pk)
+    subscriptions = process.subscriptions.select_related('subscriber').all()
+    latest_change = process.changes.order_by('-detected_at').first()
+    snapshot_text = ''
+    if latest_change and latest_change.new_snapshot and latest_change.new_snapshot.text_content:
+        snapshot_text = latest_change.new_snapshot.text_content
+    elif process.last_text:
+        snapshot_text = process.last_text
+
+    if not snapshot_text:
+        messages.warning(request, 'Este processo ainda não possui dados de atualização para envio.')
+        return redirect('processes:detail', pk=pk)
+
+    from apps.monitoring.clients import FetchError, download_document
+    from apps.notifications.channels.email import send_email_notification
+    from apps.notifications.channels.evolution import send_whatsapp_attachment, send_whatsapp_notification
+
+    reference_dt = (
+        latest_change.detected_at
+        if latest_change
+        else (process.last_changed_at or process.last_checked_at or process.updated_at)
+    )
+    detected_at = localtime(reference_dt).strftime('%d/%m/%Y %H:%M')
+    subject = f'[CADE Monitor] Última atualização: {process.label}'[:180]
+    protocol = _latest_protocol_record_from_text(snapshot_text)
+    first_document = None
+    if latest_change and protocol and protocol.get('document'):
+        first_document = (
+            latest_change.documents
+            .filter(document_number=str(protocol.get('document') or ''))
+            .order_by('created_at', 'id')
+            .first()
+        )
+    if latest_change and first_document is None:
+        first_document = latest_change.documents.order_by('created_at', 'id').first()
+
+    first_doc_label = 'Não identificado'
+    first_doc_url = ''
+    email_attachments: list[dict[str, object]] = []
+    attachment_warning = ''
+
+    if protocol:
+        first_doc_label = ' '.join(
+            part for part in [
+                str(protocol.get('document') or '').strip(),
+                str(protocol.get('doc_type') or '').strip(),
+                str(protocol.get('doc_date') or '').strip(),
+                str(protocol.get('registry_date') or '').strip(),
+                str(protocol.get('unit') or '').strip(),
+            ]
+            if part
+        ).strip() or 'Não identificado'
+
+    if first_document:
+        if not protocol:
+            first_doc_label = f'{first_document.title} {first_document.document_number}'.strip()
+        first_doc_url = first_document.url or ''
+
+        if first_document.mode == 'attachment' and first_doc_url:
+            try:
+                email_attachments.append(
+                    download_document(
+                        url=first_doc_url,
+                        record={
+                            'document': first_document.document_number,
+                            'doc_type': first_document.title,
+                        },
+                        timeout=settings.REQUEST_TIMEOUT_SECONDS,
+                        user_agent=settings.USER_AGENT,
+                        max_bytes=int(getattr(settings, 'EMAIL_ATTACHMENT_MAX_BYTES', 8 * 1024 * 1024)),
+                    )
+                )
+            except FetchError as exc:
+                attachment_warning = f'Não foi possível anexar o PDF automaticamente ({exc}).'
+        elif first_doc_url:
+            attachment_warning = 'Documento classificado como somente link; PDF não anexado automaticamente.'
+    elif not protocol:
+        attachment_warning = 'Nenhum protocolo detectado para anexar nesta atualização.'
+
+    attachment_status = 'PDF associado em anexo.' if email_attachments else (attachment_warning or 'PDF não disponível.')
+    summary_text = (
+        latest_change.summary
+        if latest_change
+        else f'Último protocolo identificado: {first_doc_label}'
+    )
+
+    email_body = (
+        f'Nome do Processo: {process.label}\n\n'
+        'Última atualização detectada no processo.\n\n'
+        f'Primeira linha da Lista de Protocolos:\n{first_doc_label}\n\n'
+        f'Link do protocolo/PDF:\n{first_doc_url or "Não disponível"}\n\n'
+        f'Status do PDF: {attachment_status}\n\n'
+        f'Resumo:\n{summary_text}\n\n'
+        'Processo no SEI/CADE:\n'
+        f'{process.effective_url}\n\n'
+        f'Detectado em: {detected_at}'
+    )
+    whatsapp_body = (
+        f'📁 Nome do Processo: {process.label}\n\n'
+        '📣 Última atualização detectada no processo.\n\n'
+        f'📄 Primeiro protocolo: {first_doc_label}\n'
+        f'🔗 PDF/Documento: {first_doc_url or "Não disponível"}\n\n'
+        f'📝 Resumo: {summary_text[:600]}\n\n'
+        f'🔗 Processo no SEI/CADE:\n{process.effective_url}\n\n'
+        f'🕒 Detectado em: {detected_at}'
+    )
+
+    sent_email = 0
+    sent_whatsapp = 0
+    failed_email = 0
+    failed_whatsapp = 0
+
+    for subscription in subscriptions:
+        subscriber = subscription.subscriber
+        if not subscriber.is_reachable():
+            continue
+
+        if subscription.email_enabled and subscriber.email_enabled and subscriber.email:
+            status, _error = send_email_notification(
+                to_address=subscriber.email,
+                subject=subject,
+                body=email_body,
+                attachments=email_attachments,
+            )
+            if status == 'sent':
+                sent_email += 1
+            else:
+                failed_email += 1
+
+        if (
+            settings.EVOLUTION_ENABLED
+            and subscription.whatsapp_enabled
+            and subscriber.whatsapp_enabled
+            and subscriber.phone
+        ):
+            status, _error = send_whatsapp_notification(
+                phone=subscriber.phone,
+                body=whatsapp_body,
+            )
+            if status != 'sent':
+                failed_whatsapp += 1
+                continue
+
+            if first_doc_url:
+                media_status, _media_error = send_whatsapp_attachment(
+                    phone=subscriber.phone,
+                    media_url=first_doc_url,
+                    file_name=(first_doc_label or 'documento')[:140],
+                )
+                if media_status == 'sent':
+                    sent_whatsapp += 1
+                else:
+                    failed_whatsapp += 1
+            else:
+                sent_whatsapp += 1
+
+    if (sent_email + sent_whatsapp + failed_email + failed_whatsapp) == 0:
+        messages.warning(
+            request,
+            'Nenhum assinante elegivel para envio da última atualização neste processo.',
+        )
+    else:
+        messages.success(
+            request,
+            (
+                'Última atualização enviada. '
+                f'E-mail enviados: {sent_email}, falhas: {failed_email}. '
+                f'WhatsApp enviados: {sent_whatsapp}, falhas: {failed_whatsapp}.'
             ),
         )
 

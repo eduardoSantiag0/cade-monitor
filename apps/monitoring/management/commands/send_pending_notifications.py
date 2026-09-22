@@ -19,5 +19,6 @@ class Command(BaseCommand):
             f"Total: {stats.get('total', 0)} | "
             f"Enviadas: {stats.get('sent', 0)} | "
             f"Falhas: {stats.get('failed', 0)} | "
-            f"Ignoradas: {stats.get('skipped', 0)}"
+            f"Ignoradas: {stats.get('skipped', 0)} | "
+            f"Pendentes: {stats.get('pending', 0)}"
         )

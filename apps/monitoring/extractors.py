@@ -41,6 +41,7 @@ DATE_TIME_RE = re.compile(r'^\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}$')
 DATE_RE = re.compile(r'^\d{2}/\d{2}/\d{4}$')
 PROCESS_OR_DOCUMENT_RE = re.compile(r'^(\d+|\d{5}\.\d{6}/\d{4}-\d{2})$')
 DOCUMENT_NUMBER_RE = re.compile(r'^\d{5,}$')
+PROCESS_NUMBER_RE = re.compile(r'\b\d{5}\.\d{6}/\d{4}-\d{2}\b')
 PROCESS_DETAIL_LINK_RE = re.compile(
     r"href=[\"']([^\"']*md_pesq_processo_exibir\.php\?[^\"']+)", re.I
 )
@@ -58,6 +59,19 @@ PROTOCOL_HEADER_KEYS = {
     'data de registro', 'unidade',
 }
 MOVEMENT_HEADER_KEYS = {'data/hora', 'data hora', 'unidade', 'descricao'}
+
+RELATED_PROCESS_KEYWORDS = (
+    'apartad',
+    'autos apartados',
+    'apens',
+    'relacionad',
+    'vinculad',
+    'encaminh',
+    'remetid',
+    'redistribu',
+    'desmembr',
+    'outro processo',
+)
 
 # Padrões de linhas que variam a cada carregamento (timestamps do servidor)
 # e que geram falsos positivos se não forem removidos.
@@ -337,6 +351,37 @@ def new_protocol_records(old_text: str | None, new_text: str) -> list[dict[str, 
     """Retorna apenas os registros de protocolo presentes em new_text mas não em old_text."""
     old_entries = {r['text'] for r in extract_protocol_records(old_text or '')}
     return [r for r in extract_protocol_records(new_text) if r['text'] not in old_entries]
+
+
+def new_movement_records(old_text: str | None, new_text: str) -> list[dict[str, str]]:
+    """Retorna apenas os andamentos presentes em new_text mas não em old_text."""
+    old_entries = {r['text'] for r in extract_movement_records(old_text or '')}
+    return [r for r in extract_movement_records(new_text) if r['text'] not in old_entries]
+
+
+def related_process_mentions(text: str) -> list[str]:
+    """Extrai números de processos citados em um texto de andamento/documento."""
+    mentions: list[str] = []
+    for found in PROCESS_NUMBER_RE.findall(text or ''):
+        if found not in mentions:
+            mentions.append(found)
+    return mentions
+
+
+def is_relevant_movement(record: dict[str, str]) -> bool:
+    """
+    Identifica andamentos relevantes para notificação resumida.
+    Regra: menção a autos/processo relacionado ou termos típicos de movimentação material.
+    """
+    content = folded(record.get('text', ''))
+    if related_process_mentions(record.get('text', '')):
+        return True
+    return any(keyword in content for keyword in RELATED_PROCESS_KEYWORDS)
+
+
+def relevant_movement_records(records: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Filtra apenas andamentos relevantes para a mensagem padrão."""
+    return [record for record in records if is_relevant_movement(record)]
 
 
 def latest_cade_records(text: str | None, limit: int = 3) -> list[str]:

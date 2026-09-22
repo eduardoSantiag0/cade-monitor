@@ -11,6 +11,9 @@ import logging
 
 from django.conf import settings
 from django.core.mail import EmailMessage
+from pydantic import ValidationError
+
+from ..schemas import EmailAttachment
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +48,17 @@ def send_email_notification(
             content = att.get('content')
             if not isinstance(content, (bytes, bytearray)):
                 continue
-            filename = str(att.get('filename') or 'documento')[:140]
-            content_type = str(att.get('content_type') or 'application/octet-stream')
-            maintype, _, subtype = content_type.partition('/')
-            if not subtype:
-                maintype, subtype = 'application', 'octet-stream'
-            msg.attach(filename, bytes(content), f'{maintype}/{subtype}')
+            try:
+                attachment = EmailAttachment(
+                    filename=str(att.get('filename') or ''),
+                    content_type=str(att.get('content_type') or ''),
+                    content=bytes(content),
+                )
+            except ValidationError as exc:
+                logger.warning('[email] Anexo inválido ignorado: %s', exc)
+                continue
+            maintype, _, subtype = attachment.content_type.partition('/')
+            msg.attach(attachment.filename, attachment.content, f'{maintype}/{subtype}')
 
         msg.send(fail_silently=False)
         logger.debug('[email] Mensagem enviada para %s', to_address)

@@ -12,7 +12,10 @@ from apps.monitoring.extractors import (
     extract_protocol_records,
     html_to_text,
     latest_cade_records,
+    new_movement_records,
     normalize_text,
+    related_process_mentions,
+    relevant_movement_records,
     stable_hash,
 )
 from apps.processes.models import MonitoredProcess, ProcessStatus
@@ -96,6 +99,28 @@ class ComputeDiffTest(TestCase):
         self.assertIn('andamento', summary.lower())
 
 
+class RelevantMovementTest(TestCase):
+    def test_detects_related_process_mentions(self):
+        text = 'Novo andamento: 01/07/2026 10:00 | SG | Documento movido para autos apartados 08700.123456/2026-11'
+        mentions = related_process_mentions(text)
+        self.assertIn('08700.123456/2026-11', mentions)
+
+    def test_filters_only_relevant_movements(self):
+        old_text = 'Lista de Andamentos\nData/Hora\nUnidade\nDescricao'
+        new_text = (
+            'Lista de Andamentos\n'
+            'Data/Hora\nUnidade\nDescricao\n'
+            '01/07/2026 10:00\nSG\nMovido para autos apartados 08700.123456/2026-11\n'
+            '01/07/2026 11:00\nSG\nAtualização de rotina administrativa'
+        )
+        new_movements = new_movement_records(old_text, new_text)
+        relevant = relevant_movement_records(new_movements)
+
+        self.assertEqual(len(new_movements), 2)
+        self.assertEqual(len(relevant), 1)
+        self.assertIn('apartados', relevant[0]['text'].lower())
+
+
 class CheckRunServiceTest(TestCase):
     def setUp(self):
         self.process = MonitoredProcess.objects.create(
@@ -128,6 +153,7 @@ class CheckRunServiceTest(TestCase):
     @patch('apps.monitoring.services.get_snapshot')
     def test_no_change_returns_ok_not_changed(self, mock_get_snapshot):
         from apps.monitoring.clients import Snapshot
+        from apps.monitoring.models import CheckRun
         self.process.last_hash = 'hash_existente_xyz'
         self.process.last_text = 'Conteúdo atual'
         self.process.save()
@@ -146,6 +172,7 @@ class CheckRunServiceTest(TestCase):
 
         self.assertTrue(result['ok'])
         self.assertFalse(result['changed'])
+        self.assertEqual(CheckRun.objects.filter(process=self.process).count(), 0)
 
     @patch('apps.monitoring.services.get_snapshot')
     def test_change_detected_creates_detected_change(self, mock_get_snapshot):
@@ -171,3 +198,36 @@ class CheckRunServiceTest(TestCase):
         self.assertTrue(result['ok'])
         self.assertTrue(result['changed'])
         self.assertEqual(DetectedChange.objects.filter(process=self.process).count(), 1)
+
+    @patch('apps.monitoring.services.get_snapshot')
+    def test_invalid_page_is_not_accepted_as_change(self, mock_get_snapshot):
+        from apps.monitoring.clients import Snapshot
+        from apps.monitoring.models import DetectedChange
+
+        self.process.last_hash = 'hash_antigo_xpto'
+        self.process.last_text = (
+            'Lista de Andamentos\n' + ('Linha válida\n' * 120) +
+            'Lista de Protocolos\n' + ('Outro conteúdo\n' * 120)
+        )
+        self.process.save()
+
+        mock_get_snapshot.return_value = Snapshot(
+            url='https://sei.cade.gov.br/test',
+            status_code=200,
+            title='Access Denied',
+            text='captcha bloqueado access denied',
+            content_hash='hash_novo_invalido',
+            fetched_at='2026-07-11T10:00:00+00:00',
+            content_length=120,
+            html='<html><body>captcha</body></html>',
+        )
+
+        from apps.monitoring.services import run_check
+        result = run_check(self.process)
+
+        self.assertFalse(result['ok'])
+        self.assertFalse(result['changed'])
+        self.assertIn('inválida', result['message'].lower())
+        self.assertEqual(DetectedChange.objects.filter(process=self.process).count(), 0)
+        self.process.refresh_from_db()
+        self.assertEqual(self.process.last_hash, 'hash_antigo_xpto')

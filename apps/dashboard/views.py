@@ -71,6 +71,7 @@ def _get_test_whatsapp_destination() -> str:
 @require_POST
 def send_test_email(request):
     from apps.notifications.channels.email import send_email_notification
+    from apps.notifications.services import build_test_notification_body
 
     destination = _get_test_email_destination()
     if not destination:
@@ -81,9 +82,10 @@ def send_test_email(request):
         return redirect('dashboard:notifications')
 
     subject = '[CADE Monitor] Teste de envio de e-mail'
-    body = (
-        'Esta e uma mensagem de teste enviada pela tela de notificacoes do CADE Monitor.\n\n'
-        'Se voce recebeu este aviso, o canal de e-mail esta funcionando.'
+    body = build_test_notification_body(
+        process_label='Processo de teste',
+        process_url='https://sei.cade.gov.br/',
+        channel='email',
     )
 
     status, error = send_email_notification(to_address=destination, subject=subject, body=body)
@@ -100,6 +102,7 @@ def send_test_email(request):
 @require_POST
 def send_test_whatsapp(request):
     from apps.notifications.channels.evolution import send_whatsapp_notification
+    from apps.notifications.services import build_test_notification_body
 
     destination = _get_test_whatsapp_destination()
     if not destination:
@@ -109,9 +112,10 @@ def send_test_whatsapp(request):
         )
         return redirect('dashboard:notifications')
 
-    body = (
-        'CADE Monitor: esta e uma mensagem de teste enviada pela tela de notificacoes.\n\n'
-        'Se chegou aqui, o canal WhatsApp esta funcionando.'
+    body = build_test_notification_body(
+        process_label='Processo de teste',
+        process_url='https://sei.cade.gov.br/',
+        channel='whatsapp',
     )
 
     status, error = send_whatsapp_notification(phone=destination, body=body)

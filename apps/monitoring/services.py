@@ -19,9 +19,18 @@ from django.utils import timezone
 
 from apps.processes.models import MonitoredProcess, ProcessStatus
 
+from .cache import get_hash_and_ttl, renew_ttl_if_needed, set_hash
 from .clients import FetchError, Snapshot, collect_new_documents, get_snapshot
 from .diff import compute_diff
-from .models import CheckRun, CheckStatus, DetectedChange, PageSnapshot
+from .models import (
+    CheckRun,
+    CheckStatus,
+    DetectedChange,
+    DetectedDocument,
+    DetectedDocumentMode,
+    DetectedDocumentStatus,
+    PageSnapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +54,6 @@ def run_check(process: MonitoredProcess, notify_initial: bool = False) -> dict:
 
     Retorna dict com: ok (bool), changed (bool), message (str), check_run_id (int).
     """
-    check_run = CheckRun.objects.create(process=process, status=CheckStatus.STARTED)
     logger.info('[check] Iniciando #%d: %s', process.pk, process.label)
 
     try:
@@ -56,22 +64,48 @@ def run_check(process: MonitoredProcess, notify_initial: bool = False) -> dict:
         )
     except FetchError as exc:
         error_msg = str(exc)
+        check_run = CheckRun.objects.create(process=process, status=CheckStatus.STARTED)
         _mark_failed(check_run, process, error_msg)
         logger.warning('[check] Falha em #%d: %s', process.pk, error_msg)
         return {'ok': False, 'changed': False, 'message': error_msg, 'check_run_id': check_run.pk}
 
+    invalid_reason = _invalid_page_reason(process, snapshot_data)
+    if invalid_reason:
+        check_run = CheckRun.objects.create(process=process, status=CheckStatus.STARTED)
+        _mark_failed(check_run, process, invalid_reason)
+        logger.warning('[check] Snapshot inválido em #%d: %s', process.pk, invalid_reason)
+        return {'ok': False, 'changed': False, 'message': invalid_reason, 'check_run_id': check_run.pk}
+
+    cached_hash, ttl_remaining = get_hash_and_ttl(process.pk)
+    if cached_hash and snapshot_data.content_hash == cached_hash:
+        renewed = renew_ttl_if_needed(process.pk, ttl_remaining)
+        _touch_process_no_change(process)
+        logger.info(
+            '[check] Sem mudança em #%d (cache Redis). TTL=%ss%s',
+            process.pk,
+            ttl_remaining,
+            ' [renovado]' if renewed else '',
+        )
+        return {'ok': True, 'changed': False, 'message': 'Sem mudança detectada.', 'check_run_id': None}
+
     # ---- Primeira leitura: estabelece baseline ----
     if not process.last_hash:
-        return _handle_first_snapshot(process, check_run, snapshot_data, notify_initial)
+        result = _handle_first_snapshot(process, snapshot_data, notify_initial)
+        set_hash(process.pk, snapshot_data.content_hash)
+        return result
 
     # ---- Sem mudança ----
     if snapshot_data.content_hash == process.last_hash:
-        _mark_no_change(check_run, process)
-        logger.debug('[check] Sem mudança em #%d.', process.pk)
-        return {'ok': True, 'changed': False, 'message': 'Sem mudança detectada.', 'check_run_id': check_run.pk}
+        set_hash(process.pk, snapshot_data.content_hash)
+        _touch_process_no_change(process)
+        logger.info('[check] Sem mudança em #%d (hash do banco).', process.pk)
+        return {'ok': True, 'changed': False, 'message': 'Sem mudança detectada.', 'check_run_id': None}
 
     # ---- Mudança detectada ----
-    return _handle_change(process, check_run, snapshot_data)
+    result = _handle_change(process, snapshot_data)
+    if result.get('ok') and result.get('changed'):
+        set_hash(process.pk, snapshot_data.content_hash)
+    return result
 
 
 def run_check_for_due_processes(max_processes: int | None = None) -> list[dict]:
@@ -95,10 +129,10 @@ def run_check_for_due_processes(max_processes: int | None = None) -> list[dict]:
 
 def _handle_first_snapshot(
     process: MonitoredProcess,
-    check_run: CheckRun,
     snapshot_data: Snapshot,
     notify_initial: bool,
 ) -> dict:
+    check_run = CheckRun.objects.create(process=process, status=CheckStatus.STARTED)
     snapshot = PageSnapshot.objects.create(
         process=process,
         check_run=check_run,
@@ -136,28 +170,46 @@ def _handle_first_snapshot(
 
 def _handle_change(
     process: MonitoredProcess,
-    check_run: CheckRun,
     snapshot_data: Snapshot,
 ) -> dict:
+    check_run = CheckRun.objects.create(process=process, status=CheckStatus.STARTED)
     old_text = process.last_text
     summary, diff_text = compute_diff(old_text, snapshot_data.text)
 
+    document_results: list[dict[str, object]] = []
+
     # Tenta baixar documentos novos encontrados nos protocolos
     try:
-        attachments, doc_errors = collect_new_documents(
+        document_results = collect_new_documents(
             old_text=old_text,
             snapshot=snapshot_data,
             timeout=settings.REQUEST_TIMEOUT_SECONDS,
             user_agent=settings.USER_AGENT,
         )
-        if attachments or doc_errors:
+        if document_results:
             extra: list[str] = []
-            if attachments:
-                extra.append('Documentos baixados:')
-                extra.extend(f'- {a.get("filename")} ({a.get("url")})' for a in attachments)
-            if doc_errors:
-                extra.append('Documentos não baixados:')
-                extra.extend(f'- {e}' for e in doc_errors)
+            downloaded = [item for item in document_results if item.get('status') == 'downloaded']
+            pending = [item for item in document_results if item.get('status') == 'pending_retry']
+            link_only = [item for item in document_results if item.get('status') == 'link_only']
+
+            if downloaded:
+                extra.append('Documentos baixados nesta leitura:')
+                extra.extend(
+                    f'- {item.get("document")}: {item.get("title")} ({item.get("url")})'
+                    for item in downloaded
+                )
+            if link_only:
+                extra.append('Documentos compactados (somente link):')
+                extra.extend(
+                    f'- {item.get("document")}: {item.get("error")} ({item.get("url")})'
+                    for item in link_only
+                )
+            if pending:
+                extra.append('Documentos pendentes para retentativa:')
+                extra.extend(
+                    f'- {item.get("document")}: {item.get("error")} ({item.get("url")})'
+                    for item in pending
+                )
             diff_text = (diff_text + '\n\n' + '\n'.join(extra))[:8000]
     except Exception as exc:
         logger.warning('[check] Falha ao coletar documentos para #%d: %s', process.pk, exc)
@@ -183,6 +235,8 @@ def _handle_change(
         diff_text=diff_text,
     )
 
+    _persist_detected_documents(change, document_results)
+
     _update_process_after_change(process, snapshot_data.content_hash, snapshot_data.text)
     _schedule_notifications(change)
 
@@ -192,6 +246,39 @@ def _handle_change(
 
     logger.info('[check] Mudança detectada em #%d: %s', process.pk, summary[:200])
     return {'ok': True, 'changed': True, 'message': summary, 'check_run_id': check_run.pk}
+
+
+def _persist_detected_documents(change: DetectedChange, document_results: list[dict[str, object]]) -> None:
+    if not document_results:
+        return
+
+    for item in document_results:
+        doc_number = str(item.get('document') or '').strip()
+        if not doc_number:
+            continue
+
+        mode = (
+            DetectedDocumentMode.LINK_ONLY
+            if item.get('mode') == 'link_only'
+            else DetectedDocumentMode.ATTACHMENT
+        )
+        status = DetectedDocumentStatus.PENDING_RETRY
+        if item.get('status') == 'link_only':
+            status = DetectedDocumentStatus.LINK_ONLY_NOTIFIED
+        elif item.get('status') == 'downloaded':
+            # O download no monitor é apenas pré-validação; entrega ocorre por canal depois.
+            status = DetectedDocumentStatus.PENDING_RETRY
+
+        DetectedDocument.objects.create(
+            change=change,
+            document_number=doc_number,
+            title=str(item.get('title') or '')[:240],
+            url=str(item.get('url') or ''),
+            mode=mode,
+            status=status,
+            retryable=bool(item.get('retryable', True)),
+            failure_reason=str(item.get('error') or '')[:2000],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +301,13 @@ def _mark_no_change(check_run: CheckRun, process: MonitoredProcess) -> None:
     check_run.status = CheckStatus.NO_CHANGE
     check_run.finished_at = timezone.now()
     check_run.save(update_fields=['status', 'finished_at'])
+    process.last_checked_at = timezone.now()
+    process.status = ProcessStatus.ACTIVE
+    process.last_error = ''
+    process.save(update_fields=['last_checked_at', 'status', 'last_error'])
+
+
+def _touch_process_no_change(process: MonitoredProcess) -> None:
     process.last_checked_at = timezone.now()
     process.status = ProcessStatus.ACTIVE
     process.last_error = ''
@@ -248,3 +342,44 @@ def _schedule_notifications(change: DetectedChange) -> None:
         create_notifications_for_change(change)
     except Exception as exc:
         logger.error('[check] Erro ao criar notificações para mudança #%d: %s', change.pk, exc)
+
+
+def _invalid_page_reason(process: MonitoredProcess, snapshot: Snapshot) -> str | None:
+    text = (snapshot.text or '').strip()
+    lowered = text.lower()
+    lowered_title = (snapshot.title or '').lower()
+    haystack = f'{lowered_title}\n{lowered}'
+
+    invalid_tokens = (
+        'captcha',
+        'acesso negado',
+        'forbidden',
+        'access denied',
+        'blocked',
+        'cloudflare',
+        'service unavailable',
+        'temporariamente indisponivel',
+        'internal server error',
+        'erro interno do servidor',
+    )
+    for token in invalid_tokens:
+        if token in haystack:
+            return f'Página inválida detectada ({token}). Alteração ignorada.'
+
+    min_len = int(getattr(settings, 'MIN_VALID_PAGE_TEXT_LENGTH', 220))
+    if process.last_hash and len(process.last_text or '') > 300 and len(text) < min_len:
+        return 'Conteúdo insuficiente para validar atualização da página.'
+
+    markers = ('lista de andamentos', 'lista de protocolos')
+    has_marker = any(marker in lowered for marker in markers)
+    if process.last_text and len(process.last_text) > 500 and not has_marker:
+        return 'Página sem seções esperadas (andamentos/protocolos). Possível bloqueio/incompleto.'
+
+    if process.last_text and len(process.last_text) > 300:
+        min_ratio = float(getattr(settings, 'MIN_VALID_PAGE_SIZE_RATIO', 0.35))
+        old_len = max(1, len(process.last_text))
+        ratio = len(text) / old_len
+        if ratio < min_ratio:
+            return 'Conteúdo possivelmente incompleto: tamanho muito abaixo do histórico.'
+
+    return None

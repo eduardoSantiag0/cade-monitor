@@ -5,3 +5,5 @@ Django>=4.2
 gunicorn
 python-dotenv
 whitenoise
+redis>=5.0
+pydantic>=2,<3

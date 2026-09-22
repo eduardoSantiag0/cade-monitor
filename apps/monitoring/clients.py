@@ -13,12 +13,16 @@ from __future__ import annotations
 
 import mimetypes
 import re
+import time
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Literal
+
+from django.conf import settings
+from pydantic import BaseModel, ConfigDict, Field
 
 from .extractors import (
     CADE_SEARCH_URL,
@@ -32,20 +36,30 @@ from .extractors import (
     stable_hash,
 )
 
-MAX_DOCUMENT_BYTES = 8 * 1024 * 1024  # 8 MB por documento
+DEFAULT_DOWNLOAD_MAX_BYTES = 32 * 1024 * 1024
+COMPRESSED_CONTENT_TYPES = {
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-rar-compressed',
+    'application/x-7z-compressed',
+    'application/gzip',
+    'application/x-tar',
+}
+COMPRESSED_EXTENSIONS = {'.zip', '.rar', '.7z', '.tar', '.gz', '.tgz', '.bz2', '.xz'}
 
 
 class FetchError(RuntimeError):
     """Erro ao acessar uma página pública ou baixar um documento."""
 
 
-@dataclass(frozen=True)
-class Snapshot:
+class Snapshot(BaseModel):
     """
     Resultado imutável de uma busca de página.
     Contém texto normalizado, hash e metadados — sem o HTML bruto
     (exceto quando necessário para extração de links de documentos).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     url: str
     status_code: int
@@ -54,7 +68,39 @@ class Snapshot:
     content_hash: str
     fetched_at: str
     content_length: int
-    html: str = field(default='', repr=False)
+    html: str = Field(default='', repr=False)
+
+
+class AttachmentPayload(BaseModel):
+    """Metadados e conteúdo binário de um documento público baixado."""
+
+    model_config = ConfigDict(frozen=True)
+
+    document: str
+    title: str = ''
+    filename: str
+    content_type: str = 'application/octet-stream'
+    content: bytes = Field(repr=False)
+    url: str
+
+
+class DocumentResult(BaseModel):
+    """
+    Resultado de uma tentativa de coleta de um documento citado na Lista de
+    Protocolos. Valida o formato antes de virar dict para os consumidores
+    (services.py de monitoring/notifications), que seguem usando `.get(...)`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    document: str
+    title: str = ''
+    url: str = ''
+    mode: Literal['attachment', 'link_only']
+    status: Literal['pending_retry', 'link_only', 'downloaded']
+    retryable: bool = True
+    error: str = ''
+    attachment: AttachmentPayload | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -157,18 +203,33 @@ def _build_search_request(process_number: str, user_agent: str) -> urllib.reques
 
 
 def _open_request(request: urllib.request.Request, timeout: int) -> tuple[bytes, int, str]:
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            status = int(getattr(response, 'status', 200))
-            raw = response.read()
-            charset = response.headers.get_content_charset() or 'utf-8'
-            return raw, status, charset
-    except urllib.error.HTTPError as exc:
-        raise FetchError(f'HTTP {exc.code} ao acessar a página pública') from exc
-    except urllib.error.URLError as exc:
-        raise FetchError(f'Falha de rede: {exc.reason}') from exc
-    except TimeoutError:
-        raise FetchError('Tempo esgotado ao acessar a página pública')
+    attempts = max(1, int(getattr(settings, 'REQUEST_RETRY_ATTEMPTS', 3)))
+    backoff = float(getattr(settings, 'REQUEST_RETRY_BACKOFF_SECONDS', 1.5))
+    last_error: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status = int(getattr(response, 'status', 200))
+                raw = response.read()
+                charset = response.headers.get_content_charset() or 'utf-8'
+                return raw, status, charset
+        except urllib.error.HTTPError as exc:
+            # Erros HTTP 4xx/5xx não costumam melhorar com retry.
+            raise FetchError(f'HTTP {exc.code} ao acessar a página pública') from exc
+        except urllib.error.URLError as exc:
+            last_error = exc
+        except TimeoutError as exc:
+            last_error = exc
+
+        if attempt < attempts:
+            time.sleep(backoff * attempt)
+
+    if isinstance(last_error, urllib.error.URLError):
+        raise FetchError(f'Falha de rede: {last_error.reason}') from last_error
+    if isinstance(last_error, TimeoutError):
+        raise FetchError('Tempo esgotado ao acessar a página pública') from last_error
+    raise FetchError('Falha ao acessar a página pública')
 
 
 def _build_snapshot(url: str, raw: bytes, status: int, charset: str, prefix: str = '') -> Snapshot:
@@ -283,13 +344,28 @@ def _safe_document_filename(document: str, doc_type: str, content_type: str, fal
     return base[:140]
 
 
+def _looks_like_compressed(record: dict[str, str], url: str, content_type: str = '') -> bool:
+    lowered_url = (url or '').lower()
+    lowered_type = (record.get('doc_type', '') or '').lower()
+    lowered_content_type = (content_type or '').lower()
+    if lowered_content_type in COMPRESSED_CONTENT_TYPES:
+        return True
+    if any(lowered_url.endswith(ext) for ext in COMPRESSED_EXTENSIONS):
+        return True
+    return any(token in lowered_type for token in ('zip', 'rar', 'compact', 'comprim'))
+
+
 def download_document(
     url: str,
     record: dict[str, str],
     timeout: int,
     user_agent: str,
+    max_bytes: int | None = None,
 ) -> dict[str, object]:
     """Baixa um documento público e retorna seus metadados e conteúdo binário."""
+    max_download_bytes = max_bytes or int(
+        getattr(settings, 'DOCUMENT_DOWNLOAD_MAX_BYTES', DEFAULT_DOWNLOAD_MAX_BYTES)
+    )
     request = urllib.request.Request(
         url,
         headers={
@@ -299,32 +375,49 @@ def download_document(
             'Referer': CADE_SEARCH_URL,
         },
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            status = int(getattr(response, 'status', 200))
-            if not 200 <= status < 300:
-                raise FetchError(f'HTTP {status} ao baixar documento {record.get("document", "")}')
-            content = response.read(MAX_DOCUMENT_BYTES + 1)
-            if len(content) > MAX_DOCUMENT_BYTES:
-                raise FetchError(f'Documento excede {MAX_DOCUMENT_BYTES // (1024 * 1024)} MB')
-            content_type = response.headers.get_content_type() or 'application/octet-stream'
-    except urllib.error.HTTPError as exc:
-        raise FetchError(f'HTTP {exc.code} ao baixar documento {record.get("document", "")}') from exc
-    except urllib.error.URLError as exc:
-        raise FetchError(f'Falha de rede ao baixar documento: {exc.reason}') from exc
-    except TimeoutError:
-        raise FetchError(f'Tempo esgotado ao baixar documento {record.get("document", "")}')
+    attempts = max(1, int(getattr(settings, 'REQUEST_RETRY_ATTEMPTS', 3)))
+    backoff = float(getattr(settings, 'REQUEST_RETRY_BACKOFF_SECONDS', 1.5))
+    last_error: Exception | None = None
 
-    return {
-        'document': record.get('document', ''),
-        'title': record.get('doc_type', ''),
-        'filename': _safe_document_filename(
-            record.get('document', ''), record.get('doc_type', ''), content_type, url
-        ),
-        'content_type': content_type,
-        'content': content,
-        'url': url,
-    }
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status = int(getattr(response, 'status', 200))
+                if not 200 <= status < 300:
+                    raise FetchError(f'HTTP {status} ao baixar documento {record.get("document", "")}')
+                content = response.read(max_download_bytes + 1)
+                if len(content) > max_download_bytes:
+                    raise FetchError(
+                        f'Documento excede o limite técnico de download '
+                        f'({max_download_bytes // (1024 * 1024)} MB).'
+                    )
+                content_type = response.headers.get_content_type() or 'application/octet-stream'
+                attachment = AttachmentPayload(
+                    document=record.get('document', ''),
+                    title=record.get('doc_type', ''),
+                    filename=_safe_document_filename(
+                        record.get('document', ''), record.get('doc_type', ''), content_type, url
+                    ),
+                    content_type=content_type,
+                    content=content,
+                    url=url,
+                )
+                return attachment.model_dump()
+        except urllib.error.HTTPError as exc:
+            raise FetchError(f'HTTP {exc.code} ao baixar documento {record.get("document", "")}') from exc
+        except urllib.error.URLError as exc:
+            last_error = exc
+        except TimeoutError as exc:
+            last_error = exc
+
+        if attempt < attempts:
+            time.sleep(backoff * attempt)
+
+    if isinstance(last_error, urllib.error.URLError):
+        raise FetchError(f'Falha de rede ao baixar documento: {last_error.reason}') from last_error
+    if isinstance(last_error, TimeoutError):
+        raise FetchError(f'Tempo esgotado ao baixar documento {record.get("document", "")}') from last_error
+    raise FetchError(f'Falha ao baixar documento {record.get("document", "")}')
 
 
 def collect_new_documents(
@@ -332,8 +425,8 @@ def collect_new_documents(
     snapshot: Snapshot,
     timeout: int,
     user_agent: str,
-    limit: int = 3,
-) -> tuple[list[dict[str, object]], list[str]]:
+    limit: int = 10,
+) -> list[dict[str, object]]:
     """
     Detecta novos documentos na Lista de Protocolos e tenta baixá-los como anexos.
     Só baixa documentos que NÃO existiam no snapshot anterior.
@@ -343,24 +436,70 @@ def collect_new_documents(
         if DOCUMENT_NUMBER_RE.match(r.get('document', ''))
     ]
     if not records:
-        return [], []
+        return []
 
     links = extract_document_links(snapshot.html, snapshot.url)
-    attachments: list[dict[str, object]] = []
-    errors: list[str] = []
+    results: list[dict[str, object]] = []
 
     for record in records[:limit]:
         doc_number = record.get('document', '')
         url = links.get(doc_number)
         if not url:
-            errors.append(f'Documento {doc_number}: link de download não encontrado na página pública.')
+            results.append(DocumentResult(
+                document=doc_number,
+                title=record.get('doc_type', ''),
+                url='',
+                mode='attachment',
+                status='pending_retry',
+                retryable=True,
+                error='Link de download não encontrado na página pública.',
+            ).model_dump())
             continue
+
+        if _looks_like_compressed(record, url):
+            results.append(DocumentResult(
+                document=doc_number,
+                title=record.get('doc_type', ''),
+                url=url,
+                mode='link_only',
+                status='link_only',
+                retryable=False,
+                error='Arquivo compactado (zip/rar/7z).',
+            ).model_dump())
+            continue
+
         try:
-            attachments.append(download_document(url, record, timeout, user_agent))
+            attachment = download_document(url, record, timeout, user_agent)
+            results.append(DocumentResult(
+                document=doc_number,
+                title=record.get('doc_type', ''),
+                url=url,
+                mode='attachment',
+                status='downloaded',
+                retryable=True,
+                error='',
+                attachment=attachment,
+            ).model_dump())
         except FetchError as exc:
-            errors.append(str(exc))
+            results.append(DocumentResult(
+                document=doc_number,
+                title=record.get('doc_type', ''),
+                url=url,
+                mode='attachment',
+                status='pending_retry',
+                retryable=True,
+                error=str(exc),
+            ).model_dump())
 
     remaining = len(records) - limit
     if remaining > 0:
-        errors.append(f'{remaining} documento(s) novo(s) não baixado(s) (limite de {limit} por alerta).')
-    return attachments, errors
+        results.append({
+            'document': '',
+            'title': '',
+            'url': '',
+            'mode': 'attachment',
+            'status': 'pending_retry',
+            'retryable': True,
+            'error': f'{remaining} documento(s) novo(s) não baixado(s) (limite de {limit} por varredura).',
+        })
+    return results

@@ -35,6 +35,8 @@ services:
         env_file: .env
         environment:
             - EVOLUTION_API_BASE_URL=${EVOLUTION_API_BASE_URL_INTERNAL:-http://evolution-api:8080}
+            - PROCESS_HASH_REDIS_ENABLED=${PROCESS_HASH_REDIS_ENABLED:-true}
+            - PROCESS_HASH_REDIS_URL=${PROCESS_HASH_REDIS_URL_INTERNAL:-redis://evolution-redis:6379/1}
         volumes:
             # SQLite e logs ficam fora da imagem — persistem entre deploys e rebuilds
             - ./data:/app/data
@@ -53,6 +55,8 @@ services:
         env_file: .env
         environment:
             - EVOLUTION_API_BASE_URL=${EVOLUTION_API_BASE_URL_INTERNAL:-http://evolution-api:8080}
+            - PROCESS_HASH_REDIS_ENABLED=${PROCESS_HASH_REDIS_ENABLED:-true}
+            - PROCESS_HASH_REDIS_URL=${PROCESS_HASH_REDIS_URL_INTERNAL:-redis://evolution-redis:6379/1}
         volumes:
             - ./data:/app/data
             - ./logs:/app/logs
@@ -78,6 +82,8 @@ services:
         env_file: .env
         environment:
             - EVOLUTION_API_BASE_URL=${EVOLUTION_API_BASE_URL_INTERNAL:-http://evolution-api:8080}
+            - PROCESS_HASH_REDIS_ENABLED=${PROCESS_HASH_REDIS_ENABLED:-true}
+            - PROCESS_HASH_REDIS_URL=${PROCESS_HASH_REDIS_URL_INTERNAL:-redis://evolution-redis:6379/1}
         volumes:
             - ./data:/app/data
             - ./logs:/app/logs

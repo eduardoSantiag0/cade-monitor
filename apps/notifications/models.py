@@ -20,6 +20,12 @@ class NotificationStatus(models.TextChoices):
     INVALID_RECIPIENT = 'invalid_recipient', _('Destinatário inválido')
 
 
+class NotificationDocumentStatus(models.TextChoices):
+    PENDING = 'pending', _('Pendente')
+    SENT = 'sent', _('Enviado')
+    FAILED = 'failed', _('Falhou')
+
+
 class Notification(models.Model):
     """
     Representa uma notificação a ser enviada (ou já enviada) para um destinatário
@@ -67,7 +73,7 @@ class Notification(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f'[{self.channel}] {self.destination} → {self.get_status_display()}'
+        return f'[{self.channel}] {self.destination} -> {self.get_status_display()}'
 
 
 class NotificationAttempt(models.Model):
@@ -93,3 +99,45 @@ class NotificationAttempt(models.Model):
 
     def __str__(self) -> str:
         return f'Tentativa #{self.pk} [{self.status}]'
+
+
+class NotificationDocumentState(models.Model):
+    """Estado de entrega de cada documento por notificação e canal."""
+
+    notification = models.ForeignKey(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name='document_states',
+        verbose_name=_('notificação'),
+    )
+    document = models.ForeignKey(
+        'monitoring.DetectedDocument',
+        on_delete=models.CASCADE,
+        related_name='notification_states',
+        verbose_name=_('documento detectado'),
+    )
+    status = models.CharField(
+        _('status'),
+        max_length=20,
+        choices=NotificationDocumentStatus.choices,
+        default=NotificationDocumentStatus.PENDING,
+        db_index=True,
+    )
+    attempts = models.PositiveSmallIntegerField(_('tentativas'), default=0)
+    last_error = models.TextField(_('último erro'), blank=True)
+    sent_at = models.DateTimeField(_('enviado em'), null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('estado de documento da notificação')
+        verbose_name_plural = _('estados de documento da notificação')
+        constraints = [
+            models.UniqueConstraint(fields=['notification', 'document'], name='uniq_notification_document'),
+        ]
+        indexes = [
+            models.Index(fields=['notification', 'status']),
+        ]
+
+    def __str__(self) -> str:
+        return f'Notif #{self.notification_id} | Doc #{self.document_id} | {self.status}'

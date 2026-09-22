@@ -159,6 +159,60 @@ class DetectedChange(models.Model):
         return f'Mudança #{self.pk} — {self.process} ({self.detected_at:%Y-%m-%d %H:%M})'
 
 
+class DetectedDocumentMode(models.TextChoices):
+    ATTACHMENT = 'attachment', _('Anexo')
+    LINK_ONLY = 'link_only', _('Somente link')
+
+
+class DetectedDocumentStatus(models.TextChoices):
+    PENDING_RETRY = 'pending_retry', _('Pendente para retentativa')
+    DELIVERED = 'delivered', _('Entregue')
+    LINK_ONLY_NOTIFIED = 'link_only_notified', _('Notificado com link')
+    FAILED = 'failed', _('Falhou')
+
+
+class DetectedDocument(models.Model):
+    """Documento novo detectado na mudança, com estado para entrega de anexo."""
+
+    change = models.ForeignKey(
+        DetectedChange,
+        on_delete=models.CASCADE,
+        related_name='documents',
+        verbose_name=_('mudança'),
+    )
+    document_number = models.CharField(_('número do documento'), max_length=120, blank=True)
+    title = models.CharField(_('título/tipo'), max_length=240, blank=True)
+    url = models.TextField(_('link público no SEI'), blank=True)
+    mode = models.CharField(
+        _('modo de entrega'),
+        max_length=20,
+        choices=DetectedDocumentMode.choices,
+        default=DetectedDocumentMode.ATTACHMENT,
+    )
+    status = models.CharField(
+        _('status de entrega'),
+        max_length=30,
+        choices=DetectedDocumentStatus.choices,
+        default=DetectedDocumentStatus.PENDING_RETRY,
+        db_index=True,
+    )
+    retryable = models.BooleanField(_('permite retentativa'), default=True)
+    failure_reason = models.TextField(_('motivo da falha'), blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('documento detectado')
+        verbose_name_plural = _('documentos detectados')
+        ordering = ['created_at', 'id']
+        indexes = [
+            models.Index(fields=['change', 'status']),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.document_number or "Documento"} [{self.get_status_display()}]'
+
+
 class AppSetting(models.Model):
     """
     Par chave/valor para configurações runtime do sistema.
