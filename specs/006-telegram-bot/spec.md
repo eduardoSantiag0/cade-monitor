@@ -22,7 +22,7 @@
 - Q: Assinantes já cadastrados pelo painel podem vincular o Telegram? → A: Não na v1. Cada chat
   do Telegram vira um assinante novo.
 - Q: (pós-implementação) Como receber a última atualização com o documento? → A: Novo comando
-  `/ultima <processo>`, que envia a última atualização e o PDF do protocolo mais recente. Os
+  `/last_update <processo>`, que envia a última atualização e o PDF do protocolo mais recente. Os
   alertas no Telegram também passam a levar o arquivo do documento, e não só o link.
 - Q: Limites padrão? → A: Mantidos: 10 processos por chat, intervalo mínimo de 5 min para
   `/check` e 5 movimentações no `/history`, todos configuráveis.
@@ -278,7 +278,7 @@ um único alerta no grupo.
 - **FR-015**: Os canais de e-mail e WhatsApp MUST continuar funcionando sem mudança de
   comportamento para os assinantes atuais.
 
-- **FR-015a**: O bot MUST oferecer `/ultima <processo>` para qualquer membro do chat que
+- **FR-015a**: O bot MUST oferecer `/last_update <processo>` para qualquer membro do chat que
   acompanha o processo. O comando envia a última atualização conhecida (protocolo mais recente,
   última mudança detectada, link do processo) e o arquivo desse protocolo quando ele puder ser
   obtido. O processo não é verificado de novo.

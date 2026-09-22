@@ -43,6 +43,7 @@ class Command(BaseCommand):
         signal.signal(signal.SIGINT, self._request_shutdown)
 
         once = options['once']
+        self._sync_telegram_commands()
 
         while self._running:
             try:
@@ -63,6 +64,18 @@ class Command(BaseCommand):
                 time.sleep(1)
 
         self.stdout.write(self.style.SUCCESS('Worker encerrado.'))
+
+    def _sync_telegram_commands(self):
+        """Publica o menu de comandos do bot a cada início (deploy) — mantém o menu igual ao código."""
+        if not settings.TELEGRAM_ENABLED:
+            return
+        from apps.telegram_bot import client
+
+        result = client.set_my_commands()
+        if result.ok:
+            logger.info('[worker] Menu de comandos do Telegram atualizado.')
+        else:
+            logger.warning('[worker] Não foi possível atualizar o menu do Telegram: %s', result.description)
 
     def _request_shutdown(self, signum, frame):
         self.stdout.write('\nSinal recebido. Encerrando após o ciclo atual...')

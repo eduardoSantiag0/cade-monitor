@@ -1,5 +1,5 @@
 """
-Testes do /ultima (última atualização com documento) e do PDF nos alertas do Telegram.
+Testes do /last_update (última atualização com documento) e do PDF nos alertas do Telegram.
 SEI e Bot API sempre mockados.
 """
 from datetime import timedelta
@@ -59,15 +59,15 @@ class UltimaCommandTest(TestCase):
     def test_queues_action_without_touching_sei(self):
         self.send(f'/watch {PROC}')
         with patch('apps.telegram_bot.actions.download_document') as mock_download:
-            self.assertIn('Preparando a última atualização', self.send(f'/ultima {PROC}'))
+            self.assertIn('Preparando a última atualização', self.send(f'/last_update {PROC}'))
         mock_download.assert_not_called()
         self.assertTrue(BotAction.objects.filter(kind=BotActionKind.LATEST).exists())
 
     def test_requires_subscription_and_baseline(self):
-        self.assertIn('não acompanha', self.send(f'/ultima {PROC}'))
+        self.assertIn('não acompanha', self.send(f'/last_update {PROC}'))
         MonitoredProcess.objects.filter(pk=self.process.pk).update(last_hash='')
         self.send(f'/watch {PROC}')
-        self.assertIn('Ainda não tenho a primeira leitura', self.send(f'/ultima {PROC}'))
+        self.assertIn('Ainda não tenho a primeira leitura', self.send(f'/last_update {PROC}'))
 
     def test_group_members_can_use_it(self):
         with patch('apps.telegram_bot.client.get_chat_member',
@@ -75,7 +75,7 @@ class UltimaCommandTest(TestCase):
             self.send(f'/watch {PROC}', chat_id=-9, chat_type='group')
         with patch('apps.telegram_bot.client.get_chat_member',
                    return_value=TelegramResult(ok=True, result={'status': 'member'})) as mock_member:
-            self.assertIn('Preparando', self.send(f'/ultima {PROC}', chat_id=-9, chat_type='group'))
+            self.assertIn('Preparando', self.send(f'/last_update {PROC}', chat_id=-9, chat_type='group'))
         mock_member.assert_not_called()
 
     @patch('apps.telegram_bot.actions.get_snapshot')
@@ -87,7 +87,7 @@ class UltimaCommandTest(TestCase):
         )
         DetectedDocument.objects.create(change=change, document_number='7654321', title='Nota Técnica', url=DOC_URL)
         self.send(f'/watch {PROC}')
-        self.send(f'/ultima {PROC}')
+        self.send(f'/last_update {PROC}')
         self.mock_send.reset_mock()
 
         process_pending_bot_actions()
@@ -108,7 +108,7 @@ class UltimaCommandTest(TestCase):
     def test_unknown_link_is_looked_up_on_process_page_once_for_all_chats(self, mock_download, mock_page, _links):
         for chat_id in (111, 222):
             self.send(f'/watch {PROC}', chat_id=chat_id)
-            self.send(f'/ultima {PROC}', chat_id=chat_id)
+            self.send(f'/last_update {PROC}', chat_id=chat_id)
 
         process_pending_bot_actions()
 
@@ -121,13 +121,69 @@ class UltimaCommandTest(TestCase):
     @patch('apps.telegram_bot.actions.download_document', side_effect=FetchError('HTTP 503'))
     def test_download_failure_still_sends_text_with_link(self, _mock_download, _mock_page, _links):
         self.send(f'/watch {PROC}')
-        self.send(f'/ultima {PROC}')
+        self.send(f'/last_update {PROC}')
         self.mock_send.reset_mock()
         process_pending_bot_actions()
         text = sent_texts(self.mock_send)[0]
         self.assertIn('Não consegui baixar o documento', text)
         self.assertIn(DOC_URL, text)
         self.mock_doc.assert_not_called()
+
+
+@telegram_settings
+class WatchSendsLatestUpdateTest(TestCase):
+    """O /watch de um processo novo, após a 1ª leitura, já envia a última atualização com o PDF."""
+
+    @patch('apps.telegram_bot.client.send_document_file', return_value=OK)
+    @patch('apps.telegram_bot.client.send_message', return_value=OK)
+    @patch('apps.telegram_bot.actions.extract_document_links', return_value={'7654321': DOC_URL})
+    @patch('apps.telegram_bot.actions.get_snapshot', return_value=_snapshot())
+    @patch('apps.telegram_bot.actions.download_document', return_value=PDF)
+    @patch('apps.telegram_bot.actions.lookup_process_url', return_value='https://sei.cade.gov.br/processo')
+    def test_new_process(self, _lookup, _download, _page, _links, mock_send, mock_upload):
+        def fake_run_check(process, notify_initial=False):
+            MonitoredProcess.objects.filter(pk=process.pk).update(
+                last_hash='h', last_text=PROTOCOL_TEXT, last_checked_at=timezone.now(),
+            )
+            return {'ok': True, 'changed': False, 'message': ''}
+
+        services.handle_update(message_update(f'/watch {PROC}'))
+        mock_send.reset_mock()
+        with patch('apps.telegram_bot.actions.run_check', side_effect=fake_run_check):
+            process_pending_bot_actions()
+
+        texts = sent_texts(mock_send)
+        self.assertIn('Pronto', texts[0])
+        self.assertIn('7654321 | Nota Técnica', texts[1])
+        mock_upload.assert_called_once()
+
+
+class WorkerMenuSyncTest(TestCase):
+    @patch('apps.notifications.services.send_pending_notifications', return_value={'total': 0})
+    @patch('apps.monitoring.scheduler.get_due_processes', return_value=[])
+    @patch('apps.telegram_bot.actions.process_pending_bot_actions')
+    @patch('apps.telegram_bot.client.set_my_commands', return_value=OK)
+    def test_worker_publishes_menu_on_start_only_when_enabled(self, mock_menu, *_):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        call_command('run_worker', '--once', stdout=StringIO())
+        mock_menu.assert_not_called()
+        with self.settings(TELEGRAM_ENABLED=True, TELEGRAM_BOT_TOKEN='1:A'):
+            call_command('run_worker', '--once', stdout=StringIO())
+        mock_menu.assert_called_once()
+
+    def test_menu_has_last_update_and_valid_names(self):
+        import re
+
+        from apps.telegram_bot.client import BOT_COMMANDS
+
+        names = [name for name, _ in BOT_COMMANDS]
+        self.assertIn('last_update', names)
+        self.assertNotIn('ultima', names)
+        self.assertTrue(all(re.fullmatch(r'[a-z0-9_]{1,32}', n) for n in names))
+        self.assertTrue(all(3 <= len(d) <= 256 for _, d in BOT_COMMANDS))
 
 
 @telegram_settings

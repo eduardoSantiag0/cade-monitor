@@ -3,7 +3,8 @@ Execução das ações do bot que dependem do SEI (chamado pelo run_worker).
 
   - initial_watch: primeira leitura de um processo novo (baseline, sem alerta).
   - check: verificação sob demanda (/check).
-  - latest: última atualização com o documento mais recente (/ultima).
+  - latest: última atualização com o documento mais recente (/last_update e
+    automaticamente após o /watch).
 
 Ações do mesmo processo são agrupadas: no máximo UMA consulta ao SEI por
 processo por tick, e todos os chats que pediram recebem a resposta.
@@ -79,8 +80,7 @@ def _run_for_process(actions: list[BotAction]) -> None:
 
     # Baseline já existe (a rotina normal chegou antes): responde sem consultar.
     if process.has_baseline:
-        for action in initial:
-            _finish(action, _started_text(process))
+        _start_and_deliver_latest(process, initial)
         initial = []
 
     # /check de processo verificado dentro do cooldown (por outra via): estado salvo.
@@ -115,8 +115,7 @@ def _run_for_process(actions: list[BotAction]) -> None:
         _handle_fetch_failure(process, initial, checks)
         return
 
-    for action in initial:
-        _finish(action, _started_text(process))
+    _start_and_deliver_latest(process, initial)
     for action in checks:
         text = (
             messages.check_changed(process.label)
@@ -127,20 +126,39 @@ def _run_for_process(actions: list[BotAction]) -> None:
 
 
 def _send_latest_update(process: MonitoredProcess, actions: list[BotAction]) -> None:
-    """Monta a última atualização uma vez e entrega texto + arquivo a cada chat."""
-    text, attachment = _build_latest_update(process)
+    """/last_update: entrega texto + arquivo e conclui as ações."""
+    text = _deliver_latest(process, [a.chat for a in actions])
     for action in actions:
-        _finish(action, text)
-        if attachment and action.chat.is_reachable:
+        _finish(action, text, send=False)
+
+
+def _start_and_deliver_latest(process: MonitoredProcess, actions: list[BotAction]) -> None:
+    """/watch concluído: confirma o monitoramento e já envia a última atualização."""
+    if not actions:
+        return
+    for action in actions:
+        _finish(action, _started_text(process))
+    _deliver_latest(process, [a.chat for a in actions])
+
+
+def _deliver_latest(process: MonitoredProcess, chats: list) -> str:
+    """Monta a última atualização UMA vez e envia texto + arquivo a cada chat."""
+    text, attachment = _build_latest_update(process)
+    for chat in chats:
+        if not chat.is_reachable:
+            continue
+        reply(chat, text)
+        if attachment:
             result = client.send_document_file(
-                action.chat.chat_id,
+                chat.chat_id,
                 attachment['content'],
                 str(attachment.get('filename') or 'documento'),
                 str(attachment.get('content_type') or 'application/octet-stream'),
             )
             if not result.ok and result.is_blocked:
                 from .services import mark_chat_unreachable
-                mark_chat_unreachable(action.chat.chat_id)
+                mark_chat_unreachable(chat.chat_id)
+    return text
 
 
 def _build_latest_update(process: MonitoredProcess) -> tuple[str, dict | None]:
@@ -172,7 +190,7 @@ def _build_latest_update(process: MonitoredProcess) -> tuple[str, dict | None]:
                 )
                 doc_url = extract_document_links(snapshot.html, snapshot.url).get(record['document'], '')
             except FetchError as exc:
-                logger.warning('[telegram] /ultima: página de #%d indisponível: %s', process.pk, exc)
+                logger.warning('[telegram] /last_update: página de #%d indisponível: %s', process.pk, exc)
 
     if doc_url:
         if _looks_like_compressed(record, doc_url):
@@ -204,7 +222,7 @@ def _build_latest_update(process: MonitoredProcess) -> tuple[str, dict | None]:
 
 
 def _started_text(process: MonitoredProcess) -> str:
-    text = messages.watch_started(process.label, process.effective_url, selectors.latest_records(process))
+    text = messages.watch_started(process.label)
     if process.status in (ProcessStatus.PAUSED, ProcessStatus.ARCHIVED) and process.origin != ProcessOrigin.TELEGRAM:
         text += messages.admin_suspended_note()
     return text
@@ -256,8 +274,9 @@ def _handle_not_found(process: MonitoredProcess, actions: list[BotAction]) -> No
         recalculate_process_status(process)
 
 
-def _finish(action: BotAction, text: str, status: str = BotActionStatus.DONE) -> None:
-    _send(action, text)
+def _finish(action: BotAction, text: str, status: str = BotActionStatus.DONE, send: bool = True) -> None:
+    if send:
+        _send(action, text)
     action.status = status
     action.attempts += 1
     action.finished_at = timezone.now()

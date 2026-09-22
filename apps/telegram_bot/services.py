@@ -264,10 +264,13 @@ def cmd_watch(chat: TelegramChat, args: str) -> str:
     recalculate_process_status(process)
 
     if not process.has_baseline:
+        # Primeira leitura no worker; ao terminar, ele também envia a última atualização.
         queue_action(chat, process, BotActionKind.INITIAL_WATCH)
         return messages.watch_queued(ref)
 
-    text = messages.watch_started(process.label, process.effective_url, selectors.latest_records(process))
+    # Processo já conhecido: confirma na hora e já busca a última atualização com documento.
+    queue_action(chat, process, BotActionKind.LATEST)
+    text = messages.watch_started(process.label)
     if process.status in (ProcessStatus.PAUSED, ProcessStatus.ARCHIVED):
         text += messages.admin_suspended_note()
     return text
@@ -356,9 +359,9 @@ def cmd_check(chat: TelegramChat, args: str) -> str:
     return messages.check_queued(process.label)
 
 
-def cmd_ultima(chat: TelegramChat, args: str) -> str:
+def cmd_last_update(chat: TelegramChat, args: str) -> str:
     """Baixar o documento é acesso ao SEI → vira ação do worker (nunca no webhook)."""
-    subscription, error = _resolve_subscription(chat, args, 'ultima')
+    subscription, error = _resolve_subscription(chat, args, 'last_update')
     if error:
         return error
     process = subscription.process
@@ -379,5 +382,5 @@ COMMANDS: dict[str, Callable[[TelegramChat, str], str]] = {
     'pause': cmd_pause,
     'resume': cmd_resume,
     'check': cmd_check,
-    'ultima': cmd_ultima,
+    'last_update': cmd_last_update,
 }

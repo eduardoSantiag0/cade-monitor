@@ -1,318 +1,294 @@
 # CADE Monitor
 
-Radar leve de acompanhamento de processos públicos do CADE/SEI.
-Avisa assinantes por e-mail ou WhatsApp quando houver nova movimentação ou qualquer alteração
-relevante no texto extraído de uma página pública.
+**Acompanhe processos públicos do CADE pelo Telegram.** Mande o número do processo para o bot
+e receba um aviso, com o documento anexado, sempre que surgir uma movimentação nova no SEI.
 
-> O sistema apenas consulta páginas públicas, extrai conteúdo visível, compara com versões
-> anteriores e registra mudanças. Não acessa dados privados, não burla autenticação e não
-> modifica nenhuma informação.
 
-Este projeto segue o workflow de [Spec Kit](https://github.com/github/spec-kit) (Spec-Driven
-Development) — specs, planos e tarefas de cada feature ficam em `specs/`, e os princípios
-arquiteturais do projeto ficam documentados em `.specify/memory/constitution.md`.
+```
+/watch 08700.005905/2026-38
+```
 
----
-
-## Stack
-
-| Camada    | Tecnologia                     |
-| --------- | ------------------------------ |
-| Backend   | Django 5.x                     |
-| Banco     | PostgreSQL 18 (Render) — produção |
-| Banco dev | SQLite (WAL mode) — dev/testes |
-| Interface | Django templates + CSS próprio |
-| Admin     | Django Admin                   |
-| Worker    | `management command` em loop   |
-| WSGI      | Gunicorn                       |
-| Telegram  | Bot API (webhook) — canal principal |
-| WhatsApp  | Evolution API (opcional)       |
-| E-mail    | SMTP via `django.core.mail`    |
-| Container | Docker + Docker Compose        |
+> O CADE Monitor só consulta páginas **públicas** do SEI do CADE, respeitando um intervalo mínimo
+> entre consultas. Não acessa dados sigilosos, não burla autenticação e não altera nada.
+> Confira sempre a página oficial antes de tratar um alerta como prova processual.
 
 ---
 
-## Início rápido (desenvolvimento)
+## Como funciona
+
+```
+Você                         CADE Monitor                                SEI/CADE
+ │  /watch 08700.…/2026-38      │                                            │
+ │ ───────────────────────────► │  valida o número e confirma na hora        │
+ │                              │  primeira leitura (estado inicial) ──────► │
+ │  ✅ monitorando              │ ◄──────────────────────────────────────────│
+ │  🧾 última atualização + PDF │                                            │
+ │ ◄─────────────────────────── │                                            │
+ │                              │  verifica periodicamente (≥ 25 min) ─────► │
+ │                              │  compara com a leitura anterior            │
+ │  📬 alerta + documento novo  │  mudou? ─► alerta para todos que acompanham │
+ │ ◄─────────────────────────── │                                            │
+```
+
+- **Uma consulta serve a todos.** Se dez pessoas acompanham o mesmo processo, o SEI é consultado
+  uma vez por ciclo, e todas recebem o alerta.
+- **Documentos chegam como arquivo.** Os documentos novos são baixados e enviados no chat. Arquivos
+  compactados, ou acima do limite, vão como link.
+- **Funciona em grupos.** Adicione o bot a um grupo da equipe: os alertas chegam para todos, e
+  só administradores escolhem os processos.
+
+---
+
+## Comandos do bot
+
+| Comando | O que faz |
+|---|---|
+| `/watch <processo>` | Começa a monitorar. Aceita `08700.005905/2026-38`, `08700005905202638` ou o link público do SEI. Confirma na hora e envia a última atualização com o documento. |
+| `/last_update <processo>` | Última atualização conhecida: documento mais recente (com o arquivo), última mudança e link do processo. |
+| `/list` | Processos que você acompanha. |
+| `/status <processo>` | Situação, última verificação e últimas movimentações. |
+| `/check <processo>` | Verifica no SEI agora (respeita o intervalo mínimo, padrão de 5 min). |
+| `/history <processo>` | Últimas mudanças detectadas. |
+| `/pause <processo>` / `/resume <processo>` | Pausa ou retoma os alertas **só para você** (ou para o grupo). |
+| `/unwatch <processo>` | Para de monitorar. |
+| `/start`, `/help` | Apresentação e lista de comandos. |
+
+**Regras:**
+- Cada conversa acompanha até 10 processos (`TELEGRAM_MAX_PROCESSES_PER_CHAT`).
+- Em grupos, só administradores usam `/watch`, `/unwatch`, `/pause` e `/resume`.
+- Comandos no formato `/comando@NomeDoBot` também funcionam.
+
+---
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    TG[Telegram] -- webhook HTTPS --> WEB
+    subgraph Render
+        WEB[Web Service<br/>Gunicorn + Django<br/>webhook · painel · admin]
+        WORKER[Background Worker<br/>run_worker]
+        DB[(PostgreSQL 18)]
+    end
+    WEB <--> DB
+    WORKER <--> DB
+    WORKER -- consultas públicas --> SEI[SEI/CADE]
+    WORKER -- mensagens e documentos --> TG
+```
+
+| Peça | Papel |
+|---|---|
+| **Web Service** | Recebe as mensagens do bot (`/telegram/webhook/`, validado por secret e idempotente) e responde na hora. Também serve o painel web e o Django Admin. **Nunca consulta o SEI.** |
+| **Background Worker** (`run_worker`) | A cada ciclo, na ordem: executa os pedidos do bot que dependem do SEI (primeira leitura, `/check`, `/last_update`), verifica os processos vencidos e envia as notificações pendentes, com retentativa. Publica o menu de comandos do bot ao iniciar. |
+| **PostgreSQL 18** | Banco principal (`DATABASE_URL`). Em dev e testes, o SQLite local é usado automaticamente. |
+
+| Camada | Tecnologia |
+|---|---|
+| Backend | Django 5.2, monolito com apps por domínio |
+| Banco | PostgreSQL 18 (produção) / SQLite (dev e testes) |
+| Canal principal | Telegram Bot API, via stdlib, sem SDK |
+| Canais opcionais | E-mail (SMTP) e WhatsApp (Evolution API) |
+| Interface | Django templates + CSS próprio, Django Admin |
+| Execução | Gunicorn (1 worker, 2 threads) + `run_worker` |
+| Deploy | Docker no Render (ou Docker Compose) |
+
+---
+
+## Deploy no Render
+
+1. **Banco:** crie um PostgreSQL 18 (região Oregon, por exemplo).
+2. **Env Group `cade-monitor`:** cadastre as variáveis de [Configuração](#configuração).
+   Use a *Internal Database URL* em `DATABASE_URL`.
+3. **Web Service:** use o Docker deste repositório, na mesma região do banco, vinculado ao Env
+   Group, com o health check em `/admin/login/`. O `CMD` do `Dockerfile` já aplica as
+   migrations e sobe o Gunicorn na `$PORT`.
+4. **Background Worker:** use a mesma imagem e o mesmo Env Group, com o Docker Command
+   `python manage.py run_worker`.
+5. **Primeiro acesso:** crie o usuário do painel com `python manage.py createsuperuser` (pelo
+   Shell do Render ou pela sua máquina, com a *External Database URL*).
+6. **Ligar o bot:** rode `python manage.py telegram_webhook` e confira com `--info`.
+
+> Workers e Cron Jobs não têm plano gratuito no Render. Um Web Service gratuito "dorme" após
+> ~15 min sem acesso, e instâncias gratuitas podem ter as portas SMTP bloqueadas (confira a
+> documentação do Render antes de ligar o e-mail).
+
+---
+
+## Configuração
+
+Referência completa, com comentários, em [`.env.example`](.env.example). Nunca versione `.env`
+nem `.env.*`.
+
+**Núcleo**
+
+| Variável | Exemplo / padrão | Observação |
+|---|---|---|
+| `SECRET_KEY` | `python -c "import secrets; print(secrets.token_urlsafe(50))"` | Obrigatória com `DEBUG=false`. |
+| `DEBUG` | `false` | |
+| `ALLOWED_HOSTS` | `seu-app.onrender.com` | |
+| `BASE_URL` | `https://seu-app.onrender.com` | Usada pelo webhook e pelo CSRF atrás do proxy. |
+| `DATABASE_URL` | `postgresql://user:senha@host/db` | Ausente = SQLite. Definida mas vazia = erro. |
+| `DB_SSLMODE` / `DB_CONN_MAX_AGE` | `require` / `60` | |
+
+**Telegram**
+
+| Variável | Padrão | Observação |
+|---|---|---|
+| `TELEGRAM_ENABLED` | `false` | Ligue no Web Service e no Worker. |
+| `TELEGRAM_BOT_TOKEN` | — | Gerado no [@BotFather](https://t.me/BotFather). |
+| `TELEGRAM_WEBHOOK_SECRET` | — | De 16 a 256 caracteres `[A-Za-z0-9_-]`. |
+| `TELEGRAM_BOT_USERNAME` | vazio | Sem `@`. Se vazio, é obtido via `getMe`. |
+| `TELEGRAM_MAX_PROCESSES_PER_CHAT` | `10` | |
+| `TELEGRAM_CHECK_COOLDOWN_SECONDS` | `300` | Intervalo mínimo do `/check` (mínimo 60). |
+| `TELEGRAM_HISTORY_LIMIT` | `5` | |
+| `TELEGRAM_ATTACHMENT_MAX_BYTES` | `20971520` | Até 50 MB são aceitos pela Bot API. |
+
+**Monitoramento**
+
+| Variável | Padrão | Observação |
+|---|---|---|
+| `USER_AGENT` | — | Identifique o robô com um contato real. |
+| `CHECK_INTERVAL_SECONDS` | `1500` | Mínimo de 25 min por processo. |
+| `WORKER_TICK_SECONDS` | `5` | Tempo de resposta dos pedidos do bot. |
+| `MAX_PROCESSES_PER_CYCLE` / `SLEEP_BETWEEN_REQUESTS_SECONDS` | `20` / `2` | |
+
+**Canais opcionais**
+- **E-mail:** `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
+  `SMTP_TLS`/`SMTP_SSL`, `MAIL_FROM`. Funciona com qualquer provedor SMTP (Gmail, Zoho, Outlook,
+  Brevo, SES…). Na porta 587 use TLS; na 465, SSL. Sem SMTP, o e-mail sai no console em dev.
+- **WhatsApp:** `EVOLUTION_ENABLED`, `EVOLUTION_API_BASE_URL`, `EVOLUTION_API_KEY`,
+  `EVOLUTION_INSTANCE_NAME`. Provider único: [Evolution API](https://doc.evolution-api.com/)
+  self-hosted.
+
+---
+
+## Painel web
+
+O painel fica em `https://seu-app.onrender.com/` (login do Django). Nele você pode:
+- cadastrar processos e assinantes de e-mail e WhatsApp;
+- disparar "Checar agora" e "Enviar última atualização";
+- revisar e classificar mudanças;
+- ver o histórico de notificações.
+
+No **Django Admin** (`/admin/`) estão os chats do Telegram, as ações do bot e as assinaturas
+(inclusive as pausadas).
+
+Processos criados pelo bot são pausados automaticamente quando ninguém mais os acompanha.
+Processos cadastrados pelo painel nunca têm o status alterado pelo bot.
+
+---
+
+## Desenvolvimento local
 
 ```bash
-# 1. Crie e ative o virtualenv
 python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\Activate.ps1 # Windows
-
-# 2. Instale as dependências
+.venv\Scripts\Activate.ps1          # Windows (Linux/Mac: source .venv/bin/activate)
 pip install -r requirements.txt
+cp .env.example .env                # sem DATABASE_URL → usa SQLite
 
-# 3. Configure o ambiente
-cp .env.example .env
-# Edite .env com valores reais (nunca comite o .env)
-
-# 4. Aplique as migrations e crie o superusuário
 python manage.py migrate
 python manage.py createsuperuser
-
-# 5. Rode o servidor de desenvolvimento
-python manage.py runserver
-
-# 6. Em outro terminal, rode o worker de monitoramento
-python manage.py run_worker
+python manage.py runserver          # painel em http://localhost:8000
+python manage.py run_worker         # em outro terminal
 ```
 
-Acesse `http://localhost:8000` para o painel e `http://localhost:8000/admin` para o Django Admin.
+- **Testar contra PostgreSQL:** `docker compose --profile pg up -d postgres` e
+  `DATABASE_URL=postgresql://cade:cade@localhost:5432/cade?sslmode=disable`. Não rode a suíte
+  contra o banco do Render.
+- **Webhook em dev:** o Telegram exige HTTPS. Use um túnel e
+  `python manage.py telegram_webhook --url https://seu-tunel`.
 
----
-
-## Deploy com Docker
-
-```bash
-cp .env.example .env
-# Edite .env: SECRET_KEY segura, ALLOWED_HOSTS, SMTP, Evolution API
-
-docker compose up -d --build
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser
-```
-
-Os serviços `web`, `worker` e `scheduler` compartilham a mesma imagem (`Dockerfile`); veja
-`docker-compose.yml` para o papel de cada um e para o serviço opcional `evolution-api`.
-
----
-
-## Management commands
+### Management commands
 
 ```bash
-# Worker contínuo (usado no Docker Compose)
-python manage.py run_worker
-
-# Checagem única de todos os processos vencidos (para cron)
-python manage.py check_processes
-
-# Checa um processo específico pelo ID
-python manage.py check_process --id 1
-
-# Testa extração de texto de uma URL ou número de processo
-python manage.py probe_process "https://sei.cade.gov.br/..."
-python manage.py probe_process "08700.005905/2026-38"
-
-# Resolve número de processo para URL pública
-python manage.py resolve_process "08700.005905/2026-38"
-
-# Envia notificações pendentes (também roda automaticamente no worker)
+python manage.py run_worker                 # worker contínuo (--once = um ciclo)
+python manage.py telegram_webhook           # registra webhook + menu (--info, --delete, --url)
+python manage.py check_process --id 1       # checa um processo
+python manage.py check_processes            # checa os vencidos (para cron)
+python manage.py probe_process "08700.005905/2026-38"   # testa a extração sem gravar
+python manage.py resolve_process "08700.005905/2026-38" # número → URL pública
 python manage.py send_pending_notifications
-
-# Resumo diário para todos os assinantes (rodar via cron às 8h)
-python manage.py generate_daily_digest
-python manage.py generate_daily_digest --hours 48 --dry-run
-
-# Limpeza de snapshots antigos
-python manage.py cleanup_snapshots
-python manage.py cleanup_snapshots --keep 50 --dry-run
-
-# Backup (SQLite: cópia do arquivo; PostgreSQL: pg_dump se disponível,
-# senão avisa que o backup é gerenciado pelo Render)
-python manage.py backup_db --dest backups --keep 7
+python manage.py generate_daily_digest      # resumo diário (--hours 48 --dry-run)
+python manage.py cleanup_snapshots          # snapshots antigos + registros do bot > 30 dias
+python manage.py backup_db --dest backups   # SQLite: cópia; Postgres: pg_dump, se houver
 ```
+
+### Migrar dados de SQLite para PostgreSQL
+
+Com o worker **parado**:
+
+```bash
+# 1. exportar do SQLite (sem DATABASE_URL no ambiente)
+python manage.py dumpdata --natural-foreign \
+  --exclude contenttypes --exclude auth.permission \
+  --exclude admin.logentry --exclude sessions \
+  -o data/migration.json
+
+# 2. importar no Postgres (com DATABASE_URL = External URL)
+python manage.py migrate
+python manage.py loaddata data/migration.json
+
+# 3. reajustar as sequences
+python manage.py sqlsequencereset processes subscribers monitoring notifications telegram_bot auth \
+  | python manage.py dbshell
+```
+
+Depois, **apague `data/migration.json`**, porque ele contém dados de assinantes. O roteiro de
+validação está em `specs/005-postgres-render/quickstart.md`.
 
 ---
 
 ## Estrutura
 
 ```
-config/          ← settings, urls, wsgi
+config/            settings, urls, validação do ambiente (env_schema), seleção do banco
 apps/
-  processes/     ← MonitoredProcess, ProcessTag
-  monitoring/    ← CheckRun, PageSnapshot, DetectedChange, scraping, diff
-  subscribers/   ← Subscriber, ProcessSubscription
-  notifications/ ← Notification, canais email/evolution/telegram
-  telegram_bot/  ← bot do Telegram: webhook, comandos, ações do worker
-  dashboard/     ← views do painel
-templates/       ← HTML templates Django
-static/css/      ← CSS próprio
-tests/           ← testes automatizados
-specs/           ← specs, planos e tarefas (Spec Kit)
+  telegram_bot/    webhook, comandos, cliente da Bot API, ações executadas pelo worker
+  processes/       MonitoredProcess (painel e bot)
+  monitoring/      scraping do SEI, snapshots, diff, detecção de mudanças, run_worker
+  notifications/   fila de notificações e canais: telegram, email, evolution
+  subscribers/     assinantes e assinaturas (com pausa por assinatura)
+  dashboard/       painel web
+specs/             specs, planos e tarefas por feature (Spec Kit)
+tests/             suíte automatizada (SQLite e PostgreSQL 18 no CI)
 ```
 
 ---
 
-## Páginas públicas suportadas
-
-O sistema aceita dois formatos de fonte ao cadastrar um processo:
-
-1. **URL pública direta** — idealmente o link final de exibição do processo
-   (`md_pesq_processo_exibir.php?...`), que é o formato mais estável para monitorar.
-2. **Número de protocolo CADE/SEI** — ex: `08700.005905/2026-38`. Nesse caso o sistema envia uma
-   consulta pública à página de pesquisa do SEI e segue automaticamente o primeiro link de
-   resultado para resolver a URL de detalhe.
-
-A página de pesquisa pública do CADE/SEI fica em:
-
-```
-https://sei.cade.gov.br/sei/modulos/pesquisa/md_pesq_processo_pesquisar.php?acao_externa=protocolo_pesquisar&acao_origem_externa=protocolo_pesquisar&id_orgao_acesso_externo=0
-```
-
-A página de detalhe de um processo público normalmente contém uma "Lista de Protocolos" e uma
-"Lista de Andamentos" — é o texto dessas seções que o monitor compara entre leituras.
-
----
-
-## Cadastrar um processo
-
-No painel:
-
-1. Informe um rótulo interno para identificar o processo.
-2. Cole o link final público do processo ou informe o número de protocolo.
-3. Cadastre assinantes (e-mail e, se o WhatsApp estiver configurado, telefone em formato
-   internacional) e vincule-os ao processo.
-4. Clique em "Checar agora" para gravar a primeira leitura (linha de base) — a partir da próxima
-   mudança detectada, os alertas são enviados aos assinantes vinculados.
-
----
-
-## Variáveis de ambiente
-
-Veja `.env.example` para a lista completa com comentários. Variáveis obrigatórias em produção:
-
-| Variável        | Descrição                                                                              |
-| --------------- | -----------------------------------------------------------------------------------------|
-| `SECRET_KEY`    | Chave Django — gere com `python -c "import secrets; print(secrets.token_urlsafe(50))"`. Obrigatória e validada: a aplicação recusa iniciar com `DEBUG=false` sem uma chave própria. |
-| `ALLOWED_HOSTS` | Domínios permitidos, separados por vírgula                                             |
-| `DATABASE_URL`  | URL do PostgreSQL (`postgresql://user:senha@host:5432/db`). Se ausente, usa SQLite. Definida mas vazia = erro. Veja [Banco de dados](#banco-de-dados-postgresql). |
-| `SQLITE_PATH`   | Caminho do banco SQLite — usado só sem `DATABASE_URL` (dev/testes)                     |
-| `DEBUG`         | `false` em produção                                                                    |
-
-### Banco de dados (PostgreSQL)
-
-Produção usa **PostgreSQL 18 gerenciado no Render**, configurado apenas por `DATABASE_URL`
-(nunca versione a URL real — ela contém a senha).
-
-- **Serviços dentro do Render** (web, worker): use a *Internal Database URL*.
-- **Acesso de fora** (sua máquina, migração de dados): use a *External Database URL*
-  (`*.render.com`), sempre com TLS.
-- `DB_SSLMODE` (padrão `require`) e `DB_CONN_MAX_AGE` (padrão `60`) ajustam TLS e conexões
-  persistentes; `?sslmode=` na URL tem precedência.
-- Sem `DATABASE_URL` a aplicação usa o SQLite local — é o modo de dev e da suíte de testes.
-- Postgres local para testes: `docker compose --profile pg up -d postgres` e
-  `DATABASE_URL=postgresql://cade:cade@localhost:5432/cade?sslmode=disable`.
-  (Não rode a suíte contra o banco do Render.)
-
-#### Migrar de SQLite para PostgreSQL
-
-Com o worker **parado**:
-
-```bash
-# 1. exportar do SQLite (sem DATABASE_URL no ambiente)
-python manage.py dumpdata --natural-foreign   --exclude contenttypes --exclude auth.permission   --exclude admin.logentry --exclude sessions   -o data/migration.json
-
-# 2. importar no Postgres (External URL, com DATABASE_URL definida)
-python manage.py migrate
-python manage.py loaddata data/migration.json
-
-# 3. reajustar as sequences para os próximos IDs não colidirem
-python manage.py sqlsequencereset processes subscribers monitoring notifications auth   | python manage.py dbshell
-```
-
-Compare as contagens por model nos dois bancos (veja
-`specs/005-postgres-render/quickstart.md`) e **apague `data/migration.json`** — ele contém
-dados de assinantes. Como `last_hash` é migrado, o próximo ciclo do worker não gera alertas de
-"primeira leitura".
-
-### E-mail (SMTP)
-
-```
-SMTP_ENABLED=true
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=usuario@example.com
-SMTP_PASSWORD=senha-ou-app-password
-MAIL_FROM=usuario@example.com
-SMTP_TLS=true
-```
-
-Sem SMTP habilitado, o backend de console do Django é usado em desenvolvimento — o e-mail aparece
-no terminal em vez de ser enviado de verdade.
-
-### Bot do Telegram (canal principal)
-
-Qualquer pessoa (ou grupo) pode acompanhar processos sozinha, pelo Telegram, e receber alertas
-de movimentação. O WhatsApp e o e-mail continuam disponíveis para assinantes do painel.
-
-**Configurar**
-
-1. Crie o bot no [@BotFather](https://t.me/BotFather) (`/newbot`) e guarde o token.
-2. Configure, nos serviços web **e** worker:
-   ```
-   TELEGRAM_ENABLED=true
-   TELEGRAM_BOT_TOKEN=<token>
-   TELEGRAM_WEBHOOK_SECRET=<python -c "import secrets; print(secrets.token_urlsafe(32))">
-   BASE_URL=https://<seu-app>.onrender.com
-   ```
-3. Depois do deploy: `python manage.py migrate` e `python manage.py telegram_webhook`
-   (confira com `--info`; remova com `--delete`).
-
-**Comandos**
-
-| Comando | O que faz |
-|---|---|
-| `/start`, `/help` | apresentação e ajuda |
-| `/watch <processo>` | começa a monitorar (ex.: `/watch 08700.005905/2026-38`, também aceita o link do SEI) |
-| `/unwatch <processo>` | para de monitorar |
-| `/list` | processos acompanhados |
-| `/status <processo>` | última movimentação conhecida |
-| `/check <processo>` | verifica agora (respeita `TELEGRAM_CHECK_COOLDOWN_SECONDS`) |
-| `/pause`, `/resume <processo>` | pausa/retoma os alertas só para quem pediu |
-| `/history <processo>` | últimas movimentações |
-| `/ultima <processo>` | última atualização com o PDF do documento mais recente |
-
-**Como funciona**
-
-- O webhook (`/telegram/webhook/`) só aceita chamadas com o secret, processa cada update uma
-  vez e **nunca consulta o SEI**. A primeira leitura do `/watch` e o `/check` viram ações
-  executadas pelo `run_worker` (uma consulta por processo por ciclo).
-- Cada conversa vira um assinante. Os alertas usam o mesmo fluxo de notificações, tentativas e
-  anexos dos outros canais. Os documentos novos são **baixados e enviados como arquivo** (até
-  `TELEGRAM_ATTACHMENT_MAX_BYTES`, padrão 20 MB); compactados ou maiores vão só como link.
-- **Grupos:** adicione o bot ao grupo. Só administradores usam `/watch`, `/unwatch`, `/pause`
-  e `/resume`. Qualquer membro pode usar `/list`, `/status`, `/history` e `/check`.
-- Limite de `TELEGRAM_MAX_PROCESSES_PER_CHAT` processos por conversa (padrão 10).
-- Processos criados pelo bot são pausados automaticamente quando ninguém mais os acompanha.
-  Processos cadastrados pelo painel nunca têm o status alterado pelo bot.
-
-### WhatsApp (Evolution API)
-
-O único provider de WhatsApp deste projeto é a [Evolution API](https://doc.evolution-api.com/)
-self-hosted.
-
-```
-EVOLUTION_ENABLED=true
-EVOLUTION_API_BASE_URL=http://localhost:8080
-EVOLUTION_API_KEY=sua_chave
-EVOLUTION_INSTANCE_NAME=cade-monitor
-```
-
-Se a Evolution API retornar erro de envio ou a instância estiver desconectada, a falha fica
-registrada em `Notification`/`NotificationAttempt` e é reprocessada automaticamente nos próximos
-ciclos, até o limite de `MAX_NOTIFICATION_ATTEMPTS`.
-
----
-
-## Testes
+## Testes e CI
 
 ```bash
 python manage.py test tests
-python manage.py test tests --verbosity=2
 ```
+
+O GitHub Actions roda a suíte duas vezes: com SQLite e contra um PostgreSQL 18 real (job
+`test-postgres`), além de checar se falta alguma migration. As chamadas externas (SEI, Bot API,
+SMTP, Evolution) são sempre mockadas.
 
 ---
 
-## Cuidados de produção
+## Como o projeto é desenvolvido
 
-- Nunca versione o arquivo `.env`.
-- Gere uma `SECRET_KEY` própria antes de qualquer deploy — a aplicação recusa subir sem isso em
-  produção.
-- Use HTTPS em produção (reverse proxy como Nginx/Caddy na frente do Gunicorn).
-- O painel exige autenticação Django em todas as rotas.
-- Respeite intervalos de checagem responsáveis (mínimo de 25 minutos por processo, ver
-  `.specify/memory/constitution.md`) — o sistema consulta páginas públicas de terceiros.
-- Valide a página oficial antes de tratar qualquer alerta como prova processual.
-- Monitore `logs/cade-monitor.log`. Em produção o backup do PostgreSQL é gerenciado pelo Render;
-  em dev, `python manage.py backup_db` copia o SQLite.
+O projeto segue o [Spec Kit](https://github.com/github/spec-kit) (Spec-Driven Development). Cada
+feature tem spec, plano, pesquisa, contratos e tarefas em `specs/NNN-nome/`. Os princípios
+arquiteturais, como monitoramento responsável, monolito Django, PostgreSQL, Telegram sem SDK e
+nada de over-engineering, estão em
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+
+| Feature | Conteúdo |
+|---|---|
+| `001-cade-monitor` | Base: monitoramento, diff, painel, e-mail/WhatsApp |
+| `002-repo-hardening-cleanup` | Segurança, CI, dependências fixadas |
+| `005-postgres-render` | PostgreSQL 18 como banco principal |
+| `006-telegram-bot` | Bot do Telegram, alertas com documento, `/last_update` |
+| `003`, `004` | Processos relacionados e confiabilidade operacional (ver `specs/`) |
+
+---
+
+## Uso responsável
+
+- Intervalo mínimo de **25 minutos** por processo. O `/check` tem intervalo próprio, e pedidos
+  simultâneos viram uma única consulta.
+- Só HTTP público. O robô se identifica pelo `USER_AGENT`.
+- Credenciais (banco, token do bot, SMTP) ficam só em variáveis de ambiente. Se alguma vazar,
+  rotacione no provedor.

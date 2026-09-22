@@ -79,12 +79,20 @@ class WatchTest(CommandTestBase):
         self.assertFalse(sub.email_enabled)
         self.assertTrue(BotAction.objects.filter(kind=BotActionKind.INITIAL_WATCH, process=process).exists())
 
-    def test_known_process_answers_immediately(self):
+    def test_known_process_confirms_and_queues_latest_update(self):
         self.make_baseline_process()
         text = self.send('/watch 08700005905202638')
         self.assertIn('Pronto', text)
-        self.assertIn('Despacho publicado', text)
-        self.assertFalse(BotAction.objects.exists())
+        self.assertIn('última atualização', text)
+        self.assertEqual(
+            list(BotAction.objects.values_list('kind', flat=True)), [BotActionKind.LATEST],
+        )
+
+    def test_last_update_is_the_command_name(self):
+        self.make_baseline_process()
+        self.send(f'/watch {PROC}')
+        self.assertIn('Preparando', self.send(f'/last_update {PROC}'))
+        self.assertIn('Não entendi', self.send(f'/ultima {PROC}'))
 
     def test_panel_process_suspended_by_admin_is_flagged(self):
         process = self.make_baseline_process(origin=ProcessOrigin.PANEL)
@@ -120,7 +128,7 @@ class ManageTest(CommandTestBase):
         self.send(f'/watch {PROC}')
 
     def test_list(self):
-        self.assertIn(f'▶️ {PROC}', self.send('/list'))
+        self.assertIn(f'🟢 {PROC}', self.send('/list'))
         self.assertIn('ainda não acompanha', self.send('/list', chat_id=222))
 
     def test_status(self):
@@ -150,7 +158,7 @@ class ManageTest(CommandTestBase):
         self.assertIn('pausados', self.send(f'/pause {PROC}'))
         self.process.refresh_from_db()
         self.assertEqual(self.process.status, ProcessStatus.PAUSED)
-        self.assertIn('⏸️', self.send('/list'))
+        self.assertIn('🔕', self.send('/list'))
         self.assertIn('retomados', self.send(f'/resume {PROC}'))
         self.process.refresh_from_db()
         self.assertEqual(self.process.status, ProcessStatus.ACTIVE)

@@ -122,12 +122,12 @@ mockada.
 
 ---
 
-## Phase 9: Pós-implementação — `/ultima` e PDF nos alertas
+## Phase 9: Pós-implementação — `/last_update` e PDF nos alertas
 
 - [X] T041 `extractors.latest_protocol_record()` compartilhado; `processes/views.py` passa a usá-lo
 - [X] T042 `client.send_document_file()` (upload multipart) + `TELEGRAM_ATTACHMENT_MAX_BYTES`; remover o envio por URL
 - [X] T043 Alertas do Telegram baixam o documento e fazem upload (`notifications/services.py`, `channels/telegram.py`)
-- [X] T044 `BotActionKind.LATEST` + migration, `cmd_ultima`, mensagens e menu de comandos
+- [X] T044 `BotActionKind.LATEST` + migration, `cmd_last_update`, mensagens e menu de comandos
 - [X] T045 `actions._send_latest_update()`: link conhecido → download → upload. Link desconhecido → uma consulta à página por tick
 - [X] T046 Testes em `tests/test_telegram_latest.py` e `test_telegram_channel.py` (multipart, upload, falhas)
 

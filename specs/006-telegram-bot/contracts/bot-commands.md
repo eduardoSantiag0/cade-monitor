@@ -15,7 +15,7 @@ CADE. Em grupos, os comandos também são aceitos no formato `/cmd@NomeDoBot`.
 | `/pause <proc>` | admin | chat acompanha | `paused=True` e recalcula o status | "⏸️ Alertas pausados…" | — |
 | `/resume <proc>` | admin | chat acompanha | `paused=False` e recalcula o status | "▶️ Alertas retomados…" | — |
 | `/history <proc>` | todos | chat acompanha | — | até `TELEGRAM_HISTORY_LIMIT` mudanças (mais recente primeiro) | — |
-| `/ultima <proc>` | todos | chat acompanha; o processo já tem baseline | `BotAction(latest)` (uma pendente por chat e processo) | "📤 Preparando a última atualização…" ou "ainda não tenho a primeira leitura" | protocolo mais recente + última mudança + link do processo, seguido do **arquivo** do documento (upload) ou do motivo de não anexar |
+| `/last_update <proc>` | todos | chat acompanha; o processo já tem baseline | `BotAction(latest)` (uma pendente por chat e processo) | "📤 Preparando a última atualização…" ou "ainda não tenho a primeira leitura" | protocolo mais recente + última mudança + link do processo, seguido do **arquivo** do documento (upload) ou do motivo de não anexar |
 | texto livre ou comando desconhecido | todos | — | — | ajuda resumida | — |
 
 ## Erros padronizados

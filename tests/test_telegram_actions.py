@@ -12,7 +12,7 @@ from apps.monitoring.clients import FetchError
 from apps.processes.models import MonitoredProcess, ProcessStatus
 from apps.telegram_bot import services
 from apps.telegram_bot.actions import FAST_RETRY_ATTEMPTS, process_pending_bot_actions
-from apps.telegram_bot.models import BotAction, BotActionStatus
+from apps.telegram_bot.models import BotAction, BotActionKind, BotActionStatus
 
 from .telegram_helpers import OK, PROC, message_update, sent_texts, telegram_settings
 
@@ -52,11 +52,12 @@ class BotActionsTest(TestCase):
 
     @patch('apps.telegram_bot.actions.run_check', side_effect=_fake_run_check())
     @patch('apps.telegram_bot.actions.lookup_process_url', return_value=DETAIL_URL)
-    def test_first_read_success(self, mock_lookup, mock_run):
+    def test_first_read_success_then_sends_latest_update(self, mock_lookup, mock_run):
         self.watch()
         texts = self.run_actions()
+        self.assertEqual(len(texts), 2)
         self.assertIn('Pronto', texts[0])
-        self.assertIn('Despacho publicado', texts[0])
+        self.assertIn('Última atualização', texts[1])
         process = MonitoredProcess.objects.get(source=PROC)
         self.assertEqual(process.resolved_url, DETAIL_URL)
         self.assertEqual(BotAction.objects.get().status, BotActionStatus.DONE)
@@ -68,7 +69,7 @@ class BotActionsTest(TestCase):
         self.watch(222)
         texts = self.run_actions()
         self.assertEqual(mock_run.call_count, 1)
-        self.assertEqual(len(texts), 2)
+        self.assertEqual(len(texts), 4)  # confirmação + última atualização, para cada chat
 
     @patch('apps.telegram_bot.actions.run_check')
     @patch('apps.telegram_bot.actions.lookup_process_url', return_value=None)
@@ -124,6 +125,8 @@ class CheckActionsTest(TestCase):
         for chat_id in (111, 222):
             services.handle_update(message_update(f'/watch {PROC}', chat_id=chat_id))
             services.handle_update(message_update(f'/check {PROC}', chat_id=chat_id))
+        # Estes testes cobrem só o /check: descarta a última atualização disparada pelo /watch.
+        BotAction.objects.filter(kind=BotActionKind.LATEST).delete()
         self.mock_send.reset_mock()
 
     def test_no_change(self):
