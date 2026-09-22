@@ -35,3 +35,9 @@ RUN SECRET_KEY=build-dummy-key-not-used-at-runtime \
     python manage.py collectstatic --noinput
 
 EXPOSE 8000
+
+# Comando padrão = serviço web (Render Web Service / docker run).
+# Aplica as migrations e sobe o Gunicorn na porta que a plataforma define ($PORT).
+# O worker sobrescreve com: python manage.py run_worker
+# (no docker-compose, cada serviço já define o próprio `command`).
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 2 --timeout 60 --access-logfile - --error-logfile -"]
