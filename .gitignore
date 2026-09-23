@@ -68,3 +68,11 @@ logs/*.js
 # Node.js
 # ---------------------------------------------------------------------------
 node_modules/
+
+# ---------------------------------------------------------------------------
+# Métricas de desenvolvimento assistido por IA (dados locais; spec 007)
+# O código em tools/ai_metrics/ é versionado; só os relatórios locais não.
+# ---------------------------------------------------------------------------
+.ai-metrics/
+# Copia de seguranca feita pelo `setup` da ferramenta ao alterar o settings local do Claude Code
+.claude/settings.local.json.bak
