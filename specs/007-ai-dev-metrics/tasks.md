@@ -43,8 +43,8 @@ description: "Task list for 007-ai-dev-metrics"
 - [X] T007 Implementar `tools/ai_metrics/config.py`: carrega `config.default.json`, mescla `~/.cade-metrics/config.json`, valida regexes (falha com mensagem clara), ignora chave desconhecida com aviso, e expõe `contains_bot_name(text)` (lê `TELEGRAM_BOT_USERNAME` do ambiente ou do `.env` da raiz, compara sem distinção de maiúsculas, nunca imprime nem grava o valor)
 - [X] T008 Implementar `tools/ai_metrics/wal.py` conforme `contracts/wal-events.md`: `append(events)` sob trava, JSON canônico + `sha256`, `head.json`, `read()`, `verify()` (primeira `seq` comprometida; tolera âncora uma posição atrás), rejeição por `contains_bot_name` e por campos monetários, `--home` configurável (faz T006 passar)
 - [X] T009 [P] Escrever `tools/ai_metrics/tests/test_gitinfo.py` sobre repositórios temporários: criação do branch no reflog, branch derivado de branch de feature, ancestral de `main`, merge com branch apagado citado no commit de merge, `diff --name-only` entre merge-base e ponta, `git check-ignore`, arquivo em `git show <ref>:<path>`
-- [X] T010 Implementar `tools/ai_metrics/gitinfo.py` (subprocess `git`, saída em UTF-8, tempo-limite e erro claro se `git` faltar): `branch_created_at`, `created_from`, `is_merged_into`, `merge_commit_for_branch`, `changed_files`, `show`, `check_ignored` (faz T009 passar)
-- [X] T011 Implementar `tools/ai_metrics/cli.py` (esqueleto): `argparse` com `--home`, tabela de subcomandos registráveis, códigos de saída `0/1/2`, reconfiguração de stdout/stderr para UTF-8, `--help` em português, e o subcomando `verify` (`exit 2` quando `wal.verify()` falha); escrever antes `tools/ai_metrics/tests/test_cli.py` com o teste de `verify` e de `--help`
+- [X] T010 Implementar `tools/ai_metrics/gitinfo.py` (subprocess `git`, saída em UTF-8, tempo-limite e erro claro se `git` faltar): `branch_created_at`, `branch_base_sha`, `moved_from`, `is_merged_into`, `merge_commit_for_branch`, `changed_files`, `show_file`, `check_ignored`, `commit_time` (faz T009 passar)
+- [X] T011 Implementar `tools/ai_metrics/cli.py` (esqueleto): `argparse` com `--home` e subcomandos (`set_defaults(func=...)`), códigos de saída `0/1/2`, reconfiguração de stdout/stderr para UTF-8, `--help` em português, e o subcomando `verify` (`exit 2` quando `wal.verify()` falha); escrever antes `tools/ai_metrics/tests/test_cli.py` com o teste de `verify` e de `--help`
 
 **Checkpoint**: histórico encadeado, Git e CLI base funcionam; user stories podem começar.
 
@@ -73,7 +73,7 @@ description: "Task list for 007-ai-dev-metrics"
 - [X] T021 [US1] Implementar o modo `--hook` em `tools/ai_metrics/ingest.py` e `tools/ai_metrics/cli.py`: ignora o stdin, nunca falha (captura exceções e devolve `0`), erro em `~/.cade-metrics/errors.log`, sem saída, tempo-limite na trava; a próxima captura bem-sucedida consome `errors.log` e grava `coverage.gap` `hook-failed` com `recovered` (FR-010, FR-010a); opção oculta `--dump-stdin <arquivo>` só para o spike
 - [X] T022 [US1] Registrar o subcomando `ingest [--hook] [--final] [--quiet]` em `tools/ai_metrics/cli.py` (faz T012–T014 passarem)
 - [X] T023 [US1] Implementar `tools/ai_metrics/setup.py` e o subcomando `setup [--dry-run] [--remove] [--check]` conforme `contracts/cli.md`: cria `~/.cade-metrics/`; mescla o hook `Stop` em `.claude/settings.local.json` (cria/`.bak`/idempotente/JSON inválido aborta); comando com `sys.executable` e caminho absoluto do `__main__.py` + `ingest --hook`; confere `git check-ignore .ai-metrics/`; roda uma primeira captura; NÃO roda `backfill` (faz T015 passar)
-- [ ] T024 [US1] **Spike do hook (R4)**: rodar `setup` de verdade, fechar um turno com `--dump-stdin` ativo uma vez e documentar em `specs/007-ai-dev-metrics/research.md` (seção R4) se o hook dispara, em que diretório e o formato do stdin no Windows; confirmar que o fluxo `git switch -c <feature>` → trabalhar → captura automática funciona sem nenhuma edição manual **Estado: parcial.** Feito: `setup` rodado de verdade; o comando gravado foi executado com sucesso (exit 0, sem saída, independente do cwd, stdin inválido, bash e `cmd.exe`); o hook instalado leva `--dump-stdin` para registrar UMA vez o stdin e o cwd em `~/.cade-metrics/hook-stdin.json`. **Falta** (exige sessão nova do Claude Code, que lê os hooks ao iniciar): encerrar um turno, ler esse arquivo, anotar o resultado em `research.md` (R4) e rodar `python -m tools.ai_metrics setup` para regravar o comando sem `--dump-stdin`.
+- [X] T024 [US1] **Spike do hook (R4)**: rodar `setup` de verdade, fechar um turno com `--dump-stdin` ativo uma vez e documentar em `specs/007-ai-dev-metrics/research.md` (seção R4) se o hook dispara, em que diretório e o formato do stdin no Windows; confirmar que o fluxo `git switch -c <feature>` → trabalhar → captura automática funciona sem nenhuma edição manual (SC-005) **Concluída em 2026-09-23**: o hook dispara em sessão aberta, roda no diretório do projeto e o stdin foi documentado em `research.md` (R4); o arquivo de dump (que continha texto da resposta) foi apagado e o `setup` regravou o comando sem `--dump-stdin`.
 
 **Checkpoint**: US1 completa — captura, integridade, hook e setup validados (quickstart §0–§3).
 
@@ -222,6 +222,21 @@ description: "Task list for 007-ai-dev-metrics"
 
 ---
 
+## Phase 11: Fechamento (`/speckit-analyze` C5–C16 e verificação final)
+
+**Purpose**: aplicar o restante do relatório de análise e deixar código e documentação consistentes. Sem tarefas abertas.
+
+- [X] T073 `errors.log` com nível e contexto (`timestamp<TAB>NÍVEL<TAB>contexto<TAB>mensagem`), leitura compatível com o formato antigo, e só linhas `ERROR` viram lacuna `hook-failed` (`tools/ai_metrics/ingest.py`, `tools/ai_metrics/tests/test_hook.py`) (Princípio VII, C9)
+- [X] T074 [P] Teste que garante que todos os imports de `tools/ai_metrics` são da biblioteca padrão ou do próprio pacote (`tools/ai_metrics/tests/test_stdlib_only.py`) (FR-050, C10)
+- [X] T075 [P] Alinhar a spec: `transcript-missing` e subagentes (C5), elegibilidade sem lacunas não recuperadas além da sistemática (C6), folga de 30 min do rascunho (C7), SC-006 com 500 turnos (C12) e glossário (C13) (`specs/007-ai-dev-metrics/spec.md`)
+- [X] T076 [P] Documentar o arquivo local das análises aceitas (C8), `PowerShell`/`MultiEdit`, `feature use` com id desconhecido, `verify` que descarta cauda interrompida, opções ocultas e formato do `errors.log` (C16) (`contracts/analysis-io.md`, `contracts/cli.md`, `data-model.md`, `plan.md`, `research.md`)
+- [X] T077 [P] Corrigir nomes de funções nas tarefas (C15) e referenciar o SC-005 (C11); C14 (sobreposição entre FR-035/036 e FR-042/043) mantido de propósito: os pares tratam aspectos diferentes (marcação vs. apresentação) e cada um tem seu teste (`specs/007-ai-dev-metrics/tasks.md`)
+- [X] T078 Fechar T024 (hook `Stop` verificado em sessão aberta: dispara, cwd = raiz do projeto, formato do stdin em `research.md` R4) e remover o dump do stdin, que continha texto de resposta
+- [X] T079 Investigar a sessão `3a4857cb` (só `main`, toca `specs/002`, `003` e `004`, termina 18:57 UTC, antes da criação do branch 005 às 19:15 UTC): **não** há evidência de que seja da feature 005, então nenhuma atribuição foi criada
+- [X] T080 Decidir `production_paths`: `tools/**` fica **fora** (é ferramenta de desenvolvimento que não vai para a imagem; segue como artefato executável, então conta para início da Implementação, churn e ciclos de correção). Regra de materialidade de divergência (≥ 1% dos tokens do modelo) mantida: nenhum requisito ou teste a contradiz
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -290,5 +305,5 @@ Task: "test_setup.py em tools/ai_metrics/tests/test_setup.py"
 - [P] = arquivos diferentes, sem dependência.
 - Verificar que os testes falham antes de implementar; commitar após cada tarefa ou grupo lógico (Conventional Commits).
 - Fixtures **sintéticas** apenas: nunca copiar transcrições reais para o repositório.
-- T024 e T057 são spikes de itens **não verificados** da spec (hook `Stop` no Windows; flags do `claude -p`); o resultado deve voltar para `research.md`.
+- T024 e T057 eram spikes de itens não verificados da spec (hook `Stop` no Windows; flags do `claude -p`); ambos foram verificados e o resultado está em `research.md` (R4 e R13).
 - Sem emenda à constituição prevista; se algum spike mudar isso, parar e usar `/speckit-constitution`.

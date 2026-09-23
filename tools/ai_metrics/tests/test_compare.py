@@ -2,7 +2,6 @@ import re
 import unittest
 
 from tools.ai_metrics import report
-from tools.ai_metrics.tests.metrics_base import MetricsBase
 from tools.ai_metrics.tests.test_report import CAUSAL, ReportBase, TEST
 from tools.ai_metrics.wal import Wal
 

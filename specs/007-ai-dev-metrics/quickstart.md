@@ -28,6 +28,9 @@ python -m tools.ai_metrics ingest      # 2ª vez: "0 registros novos"
 python -m tools.ai_metrics verify      # exit 0
 ```
 
+Uma linha ilegível **no meio** de uma transcrição gera `AVISO ... ilegível(is)` e uma lacuna `unreadable-lines` (a última
+linha incompleta é normal e não gera nada).
+
 Esperado: resumo com turnos por sessão e a **divergência** contra `session.cost` por modelo/tipo
 (hoje 2%–4% no cache-read); nenhum valor em dinheiro na saída.
 
@@ -35,6 +38,8 @@ Esperado: resumo com turnos por sessão e a **divergência** contra `session.cos
 
 1. Copie o histórico de teste, altere um byte de uma linha: `verify` → `exit 2` apontando a `seq`.
 2. Remova a última linha: `verify` → `exit 2` (âncora `head.json`).
+3. Simule uma queda no meio da gravação (corte o último registro ao meio e volte o `head.json` ao registro anterior):
+   `verify` → `exit 0` com "última linha interrompida reparada"; a captura seguinte recria o registro sem duplicar.
 
 ## 3. Setup único e hook `Stop` (FR-010, FR-010a/b)
 
@@ -114,11 +119,11 @@ conversa foi copiado para cá.
 
 | Etapa | Resultado |
 |---|---|
-| §0 Testes | `tools/ai_metrics`: 194 testes OK. `manage.py test tests` (venv do projeto): 205 testes OK, sem descobrir os testes da ferramenta |
+| §0 Testes | `tools/ai_metrics`: 210 testes OK. `manage.py test tests` (venv do projeto): 205 testes OK, sem descobrir os testes da ferramenta |
 | §1 Captura | `setup` capturou 782 registros de 6 transcrições; repetir a captura gera 0 registros novos; `verify` OK |
 | §1 Divergência vs `session.cost` | cache-read entre 0% e 3,6% nas sessões grandes (005: 1,5%; 006: 3,6%); **19,7% (cache-read) e 8,2% (cache-creation) na sessão da conversa de Grill Me**, acima do limite de 5% e sinalizada; o tipo `in` diverge 60–100%, mas vale ~0,001% do total (não gera aviso) |
 | §2 Integridade (cópia do histórico) | 1 byte editado → `exit 2` (seq 2); última linha removida → `exit 2` (âncora); linha do meio removida → `exit 2` (seq 101) |
-| §3 Hook | comando gravado pelo `setup` roda com exit 0 e sem saída, com cwd diferente, stdin inválido, no bash e no `cmd.exe`. **Disparo real do `Stop` e formato do stdin: pendentes** (exigem sessão nova) |
+| §3 Hook | comando gravado pelo `setup` roda com exit 0 e sem saída, com cwd diferente, stdin inválido, no bash e no `cmd.exe`. **Disparo real do `Stop` confirmado depois** (T024): dispara em sessão aberta, cwd = raiz do projeto; formato do stdin em `research.md` R4 |
 | §4 Backfill | 005 e 006 importadas como `historical`/`partial` (5 e 46 turnos por evidência de caminho/branch dentro da janela dos commits `6d098f9` e `95dbc2a`); Pré-Implementação `unknown`; fora das agregações; idempotente |
 | §5 Feature nova | `007-ai-dev-metrics` (branch criado 18:36:48 UTC) apareceu sozinha, com alias `specs/007-ai-dev-metrics` |
 | §6 Correção | `feature tag ... --tag setup` na sessão `3fdf02d8`: `verify` continua OK |

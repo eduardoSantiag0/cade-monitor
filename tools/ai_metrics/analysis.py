@@ -9,7 +9,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from tools.ai_metrics import config, metrics, report
+from tools.ai_metrics import metrics, report
 from tools.ai_metrics.ingest import analysis_cwd
 from tools.ai_metrics.wal import Wal, canonical
 

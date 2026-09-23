@@ -5,7 +5,7 @@ import re
 import statistics
 
 from tools.ai_metrics import config, gitinfo
-from tools.ai_metrics.model import seconds_between, total_tokens
+from tools.ai_metrics.model import seconds_between
 
 WRITE_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
 PLANNING_SKILLS = ("speckit-plan", "speckit-tasks", "speckit-analyze", "speckit-checklist")

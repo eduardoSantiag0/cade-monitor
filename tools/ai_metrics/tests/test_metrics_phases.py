@@ -1,6 +1,6 @@
 import unittest
 
-from tools.ai_metrics.tests.metrics_base import MetricsBase, tok
+from tools.ai_metrics.tests.metrics_base import MetricsBase
 
 
 class PhaseTests(MetricsBase):

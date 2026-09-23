@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools.ai_metrics import cli, setup
-from tools.ai_metrics.tests.helpers import git, make_repo, tmp_dir
+from tools.ai_metrics.tests.helpers import make_repo, tmp_dir
 
 MAIN = Path(setup.__file__).with_name("__main__.py")
 

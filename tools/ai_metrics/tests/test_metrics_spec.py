@@ -1,8 +1,6 @@
 import unittest
 
-from tools.ai_metrics import metrics
-from tools.ai_metrics.model import Model
-from tools.ai_metrics.tests.helpers import Transcript, git, make_repo, write_file
+from tools.ai_metrics.tests.helpers import git, make_repo, write_file
 from tools.ai_metrics.tests.metrics_base import MetricsBase
 from tools.ai_metrics.wal import Wal
 

@@ -31,11 +31,11 @@ Duas camadas, separadas de propósito (FR-009):
 
 | Campo | Tipo | Regra |
 |-------|------|-------|
-| `name` | string | Nome da ferramenta (`Read`, `Edit`, `Write`, `Bash`, `Skill`...) |
-| `path` | string? | Só `Read`/`Edit`/`Write`; relativo à raiz; ausente se `outside` |
+| `name` | string | Nome da ferramenta (`Read`, `Edit`, `Write`, `MultiEdit`, `Bash`, `PowerShell`, `Skill`...) |
+| `path` | string? | Só `Read`/`Edit`/`Write`/`MultiEdit`/`NotebookEdit`; relativo à raiz; ausente se `outside` |
 | `outside` | bool? | `true` se o caminho está fora do repositório |
 | `add`, `del` | int? | Linhas escritas (só `Edit`/`Write`); `Write` = tudo `add` |
-| `verify` | `{id, ok}`? | `Bash` que casa um comando de verificação; `ok = !is_error` |
+| `verify` | `{id, ok}`? | `Bash`/`PowerShell` que casa um comando de verificação; `ok = !is_error` |
 | `git` | string? | `commit`, `merge`, `push`... (classificado; comando não é gravado) |
 | `skill` | string? | Nome da skill (ferramenta `Skill`) |
 
@@ -134,7 +134,8 @@ distintos lidos (`Read.path`), volume = nº de leituras; `context.event` contado
 
 `agentCycleSeconds` somado e por fase. `intercycleGapSeconds` = `startedAt(n+1) − endedAt(n)`,
 mostrado por mediana; `idle` ≥ `idle_minutes` (30) fica marcado e fora da mediana "ativa".
-Tempo de API/ferramenta só por sessão (`session.cost`).
+Tempo de API/ferramenta só por sessão (`session.cost`): tabela à parte no relatório ("Tempo por sessão"), rotulada como
+sessão inteira e **fora dos `M-*`** (não é atribuível à feature nem entra na análise por LLM).
 
 ### Spec (só features com `specs/<alias>/tasks.md`)
 
@@ -159,6 +160,9 @@ Tempo de API/ferramenta só por sessão (`session.cost`).
   não elegível; qualquer outra lacuna não recuperada (`copilot`, `hook-failed`, `transcript-missing`) torna.
 
 ### Análise
+
+O texto de uma análise aceita fica num arquivo local (`.ai-metrics/analyses/`); o histórico guarda só os hashes
+(ver [contracts/analysis-io.md](contracts/analysis-io.md)).
 
 Ver [contracts/analysis-io.md](contracts/analysis-io.md). Cada execução aceita ou rejeitada gera
 um `analysis.generated`; só as aceitas entram no relatório.

@@ -209,8 +209,9 @@ ficam fora de qualquer agregado entre workflows.
    linha do tempo e na análise de caso, e são excluídas de agregações entre workflows.
 4. **Given** uma feature parcial, **When** o relatório fala do seu custo, **Then** usa "tokens
    medidos" ou "mínimo observado" e nunca "total consumido".
-5. **Given** uma feature instrumentada desde o nascimento e sem lacunas, **When** ela é
-   classificada, **Then** fica como observada e completa, elegível para comparações.
+5. **Given** uma feature vista pela captura desde o nascimento e sem lacunas não recuperadas
+   (a lacuna sistemática de chamadas não registradas apenas marca os tokens com `≥`), **When**
+   ela é classificada, **Then** fica como observada e completa, elegível para comparações.
 6. **Given** a conversa de configuração deste próprio estudo, **When** o desenvolvedor a
    atribui manualmente à primeira feature de métricas com a marca `setup`, **Then** ela fica
    fora das agregações entre workflows.
@@ -290,9 +291,13 @@ atribuído a nenhuma feature.
   seguinte e rodar a captura de novo completa o que faltou sem duplicar. Edição ou remoção de
   registros já reconhecidos continua sendo detectada.
 - **Fonte de dados apagada ou rotacionada**: se a transcrição de origem sumir antes de ser
-  capturada, o período vira lacuna `transcript-missing`, nunca `0`.
-- **Sessões paralelas ou de subagentes**: consumo de subagentes e de sessões simultâneas não é
-  contado duas vezes nem perdido; se a fonte deles não for localizada, vira lacuna.
+  capturada, não há como detectar isso sozinho; o desenvolvedor registra o período com
+  `gap add` (lacuna `transcript-missing`, nunca `0`). A captura a cada turno e a ingestão manual
+  reduzem essa janela.
+- **Sessões paralelas ou de subagentes**: sessões simultâneas são capturadas por arquivo, sem
+  contar duas vezes. Turnos de subagentes (`isSidechain`) entram com essa marca e o relatório
+  avisa que a origem não foi validada. Não houve subagentes nos dados observados; uma fonte de
+  subagentes não localizada é registrada como lacuna manual (`gap add`).
 - **Turno com várias escritas**: o turno que contém a primeira escrita executável inicia a
   Implementação inteiro; não há divisão de tokens dentro do turno.
 - **Escritas que não contam**: escrever fora do repositório ou em arquivos de ferramenta
@@ -352,8 +357,9 @@ atribuído a nenhuma feature.
 - **FR-010**: O sistema MUST disparar a captura automaticamente ao fim de cada turno do
   assistente e MUST oferecer captura manual como reserva.
 - **FR-010a**: A captura automática MUST NOT bloquear nem fazer falhar o turno do assistente.
-  Em caso de erro, MUST terminar sem interromper o trabalho, gravar o erro num log local e
-  registrar a lacuna (`hook-failed`) na próxima captura bem-sucedida.
+  Em caso de erro, MUST terminar sem interromper o trabalho, gravar o erro num log local
+  com nível e contexto (`timestamp`, `NÍVEL`, `contexto`, `mensagem`) e registrar a lacuna
+  (`hook-failed`) na próxima captura bem-sucedida.
 - **FR-010b**: Capturas simultâneas (ex.: duas sessões abertas) MUST ser serializadas, de modo
   que a sequência e o encadeamento do histórico nunca sejam corrompidos nem tenham registros
   duplicados.
@@ -374,8 +380,9 @@ atribuído a nenhuma feature.
 - **FR-016**: O sistema MUST rotular a atribuição como `explicit`, `inferred`, `corrected` ou
   `unattributed`, e MUST permitir correções por eventos novos.
 - **FR-017**: O sistema MUST tratar conversas de descoberta como rascunho automático, vinculado
-  somente a uma feature criada na janela do próprio rascunho; rascunhos sem vínculo MUST ser
-  mantidos e contados como exploração sem entrega.
+  somente a uma feature criada na janela do próprio rascunho (do início ao fim dele, mais uma
+  folga configurável, padrão 30 minutos, porque o branch costuma nascer logo depois da
+  conversa); rascunhos sem vínculo MUST ser mantidos e contados como exploração sem entrega.
 - **FR-018**: O sistema MUST separar as classes de custo: feature entregue, feature abandonada,
   exploração sem entrega e `unattributed`. Uma feature MUST ser classificada, no momento do
   relatório, como **entregue** quando seu branch foi integrado ao branch principal, como
@@ -448,7 +455,8 @@ atribuído a nenhuma feature.
 - **FR-038**: O sistema MUST permitir atribuir manualmente a conversa de configuração deste
   estudo à primeira feature de métricas, marcada como `setup`, fora das agregações.
 - **FR-039**: O sistema MUST considerar elegíveis para comparação apenas features observadas e
-  completas (instrumentadas desde o nascimento, sem lacunas).
+  completas (vistas pela captura desde o nascimento, sem lacunas não recuperadas além da
+  sistemática `unlogged-api-calls`) e com situação entregue ou abandonada.
 
 **Relatório e comparação**
 
@@ -534,8 +542,7 @@ atribuído a nenhuma feature.
   prompt, de resposta, de conteúdo de arquivo, valores monetários e o nome real do bot.
 - **SC-005**: Uma feature nova é rastreada de ponta a ponta com uma única ação manual (criar o
   branch), e o relatório dela sai sem nenhuma declaração adicional.
-- **SC-006**: O relatório de uma feature com centenas de turnos é gerado em menos de 10
-  segundos.
+- **SC-006**: O relatório de uma feature com 500 turnos é gerado em menos de 10 segundos.
 - **SC-007**: 100% das métricas que tocam uma lacuna aparecem como limite inferior ou `unknown`,
   e 0% aparecem como `0` quando não houve medição.
 - **SC-008**: As features 005 e 006 aparecem na linha do tempo marcadas como históricas e
@@ -555,6 +562,9 @@ atribuído a nenhuma feature.
 
 ## Assumptions
 
+- Glossário (mesmo conceito, um só nome): **captura** = comando `ingest`; **situação** = `status`
+  da feature (em andamento, entregue, abandonada); **first-pass** = fim do primeiro ciclo de
+  entrega verificado; **histórico** = o registro apenas-anexar (`wal.jsonl`).
 - O desenvolvedor usa o Claude Code como assistente principal; o uso de outras ferramentas
   (ex.: Copilot nas features 005 e 006) é tratado como lacuna, não capturado.
 - Verificado nos dados reais (2026-09-23): as transcrições somam menos que os totais por modelo

@@ -3,8 +3,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from tools.ai_metrics import analysis, metrics
-from tools.ai_metrics.tests.helpers import Transcript
+from tools.ai_metrics import analysis
 from tools.ai_metrics.tests.test_report import ReportBase
 from tools.ai_metrics.wal import Wal
 

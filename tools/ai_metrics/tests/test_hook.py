@@ -1,7 +1,6 @@
 import contextlib
 import io
 import json
-import os
 import subprocess
 import sys
 import unittest
@@ -35,6 +34,23 @@ class HookTests(IngestBase):
             self.assertEqual(self.hook(), 0)
         log = (self.home / "errors.log").read_text(encoding="utf-8")
         self.assertIn("boom", log)
+
+    def test_errors_log_tem_nivel_e_contexto(self):
+        with mock.patch.object(ingest, "run", side_effect=RuntimeError("boom")):
+            self.hook()
+        line = (self.home / "errors.log").read_text(encoding="utf-8").strip()
+        self.assertRegex(line, r"^\d{4}-\d\d-\d\dT[\d:.]+Z\tERROR\tingest --hook\tRuntimeError: boom$")
+        self.assertEqual(ingest.parse_log_line(line)[1:], ("ERROR", "ingest --hook", "RuntimeError: boom"))
+
+    def test_formato_antigo_conta_como_erro_e_outros_niveis_nao_viram_lacuna(self):
+        (self.home).mkdir(parents=True, exist_ok=True)
+        (self.home / "errors.log").write_text(
+            "2026-09-22T10:00:00.000Z\tfalha antiga\n2026-09-22T10:01:00.000Z\tWARNING\tingest\tso aviso\n",
+            encoding="utf-8")
+        ingest.run(self.home, self.repo, self.projects, final=True)
+        gaps = [r["data"] for r in self.events("coverage.gap")]
+        self.assertEqual([g["reason"] for g in gaps], ["hook-failed"])   # só a linha ERROR (formato antigo)
+        self.assertEqual(ingest.parse_log_line("x\tfalha antiga")[1:], ("ERROR", "legado", "falha antiga"))
 
     def test_trava_presa_nao_falha_o_turno(self):
         (self.home / "wal.lock").write_text("1")

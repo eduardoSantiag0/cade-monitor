@@ -32,29 +32,29 @@ do `settings.local.json` (mantém o histórico). Depois do `setup`, o fluxo é
 
 | Comando | Faz | Notas |
 |---------|-----|-------|
-| `ingest [--hook] [--final] [--quiet]` | Varre transcrições do projeto (e do `analysis-cwd`), grava eventos novos, valida contra `session.cost`, registra lacunas | `--hook`: **sempre `exit 0`**, sem saída, erros vão para `errors.log`, ignora o stdin. `--final`: aceita a última resposta mesmo incompleta. Sem opções: resumo (novos turnos, divergência por sessão) |
-| `verify` | Confere sequência, encadeamento e `head.json` | Imprime a primeira `seq` comprometida; `exit 2` se falhar |
+| `ingest [--hook] [--final] [--quiet]` | Varre transcrições do projeto (e do `analysis-cwd`), grava eventos novos, valida contra `session.cost`, registra lacunas | `--hook`: **sempre `exit 0`**, sem saída, erros vão para `~/.cade-metrics/errors.log` (uma linha `timestamp<TAB>NÍVEL<TAB>contexto<TAB>mensagem`; só linhas `ERROR` viram lacuna `hook-failed`), ignora o stdin. `--final`: aceita a última resposta mesmo incompleta. Sem opções: resumo (novos turnos, divergência por sessão) |
+| `verify` | Confere sequência, encadeamento e `head.json` | Imprime a primeira `seq` comprometida; `exit 2` se falhar. Antes de conferir, descarta uma última linha **incompleta sem quebra de linha** que a âncora ainda não reconhece (queda no meio da gravação) e conserta a âncora se estiver uma posição atrás; edição ou remoção de registros reconhecidos continua sendo falha |
 
 ## Relatórios
 
 | Comando | Faz | Notas |
 |---------|-----|-------|
-| `report <featureId\|alias> [--stdout] [--no-write]` | Gera o Markdown da feature | Grava em `.ai-metrics/reports/<featureId>.md` (sobrescreve) e/ou imprime. **Recusa gravar** se `.ai-metrics/` não estiver ignorado pelo Git (`git check-ignore`). Roda `verify` antes: se falhar, avisa e `exit 2` |
-| `report --all` | Um relatório por feature conhecida + comparação | |
+| `report <featureId\|alias> [--stdout] [--no-write]` | Gera o Markdown da feature | Grava em `.ai-metrics/reports/<featureId>.md` (sobrescreve) e/ou imprime. Inclui a **análise aceita mais recente**, se houver. **Recusa gravar** se `.ai-metrics/` não estiver ignorado pelo Git (`git check-ignore`). Roda `verify` antes: se falhar, avisa e `exit 2` |
+| `report --all` | Um relatório por feature conhecida + `_comparacao.md` | |
 | `compare [--stdout]` | Comparação entre workflows (só elegíveis) com `n`, classes de custo, vieses, `unattributed` por workflow | Grava `.ai-metrics/reports/_comparacao.md` |
-| `timeline` | Lista features em ordem cronológica com situação, `dataClass`, `coverage`, workflow | |
+| `timeline` | Lista features em ordem cronológica com situação, `dataClass`, `coverage`, workflow e, à parte, o custo fora de features (exploração sem entrega, `unattributed`, sobrecarga de análise) | |
 
 ## Correções e declarações (geram eventos)
 
 | Comando | Evento |
 |---------|--------|
-| `feature use <id> [--workflow w] [--session s \| --from ts --to ts]` | `attribution.set` (o "`/feature`" da spec) |
-| `feature correct <seq> [...mesmas opções]` | `attribution.corrected` |
+| `feature use <id\|none> [--workflow w] [--tag t] [--reason r] (--session s \| --from ts --to ts \| --turns ids)` | `attribution.set` (o "`/feature`" da spec). Exige um escopo; `none` declara o período como `unattributed`; se o id for **desconhecido**, grava antes um `feature.born` declarado (`observed`/`complete`) |
+| `feature correct <seq> --feature <id\|none> [...mesmas opções]` | `attribution.corrected` (reaproveita o escopo do registro corrigido se nenhum for informado) |
 | `feature status <id> <em-andamento\|entregue\|abandonada> [--reason ..]` | `status.corrected` |
 | `feature first-pass <id> <cycleUuid\|unknown>` | `firstPass.corrected` |
 | `feature tag <id> --session s --tag setup` | `attribution.set` com `tag` |
-| `gap add --source s --from ts --to ts --reason r [--feature id]` | `coverage.gap` |
-| `backfill` | `feature.born` (`historical`/`partial`), `coverage.gap` (`copilot`) e atribuição das features 005 e 006; idempotente |
+| `gap add --source s --from ts --to ts --reason r [--feature id]` | `coverage.gap` (`r` ∈ `copilot`, `hook-failed`, `transcript-missing`, `unlogged-api-calls`, `unreadable-lines`) |
+| `backfill` | `feature.born` (`historical`/`partial`, com a janela dos commits de `history_windows`), `feature.alias` (`path-evidence`) e `coverage.gap` (`copilot`); a atribuição dos turnos é derivada no relatório, dentro da janela; idempotente |
 
 ## Análise
 
@@ -65,6 +65,8 @@ do `settings.local.json` (mantém o histórico). Depois do `setup`, o fluxo é
 ## Regras transversais
 
 - Nenhum comando imprime ou grava o valor de `TELEGRAM_BOT_USERNAME`.
-- Comandos de leitura (`report`, `compare`, `timeline`, `analyze`) nunca escrevem no histórico,
-  exceto `analyze` (`analysis.generated`).
+- Comandos de leitura (`report`, `compare`, `timeline`, `analyze`) nunca acrescentam registros ao histórico,
+  exceto `analyze` (`analysis.generated`); todos rodam `verify` antes e recusam dados suspeitos (`exit 2`).
+- Opções ocultas, só para testes e diagnóstico: `--repo`, `--projects-dir` e `ingest --dump-stdin <arquivo>`
+  (registra uma vez o stdin e o cwd do hook; o stdin traz o texto da resposta, então apague o arquivo depois).
 - Mensagens de erro em português e com o próximo passo sugerido.

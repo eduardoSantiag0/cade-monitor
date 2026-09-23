@@ -54,8 +54,16 @@
 Rejeitada ⇒ `analysis.generated{accepted:false, rejectReasons}`; o relatório não muda.
 Aceita ⇒ seção **Análise** do relatório é (re)escrita a partir do evento mais recente aceito.
 
+## Armazenamento do texto aceito
+
+O evento `analysis.generated` guarda só hashes e o resultado. O **texto** de uma análise aceita fica num
+arquivo local `.ai-metrics/analyses/<feature>-<16 primeiros hex do outputHash>.json` (`{"output": {...}}`, ignorado
+pelo Git como todo o `.ai-metrics/`). O relatório usa o evento aceito mais recente e só exibe o arquivo se o
+`sha256` do conteúdo bater com o `outputHash` do evento; sem o arquivo, a seção **Análise** volta ao texto padrão.
+Análises rejeitadas nunca são gravadas em arquivo.
+
 ## Execução
 
-`claude -p` com a entrada e o roteiro fixo (versão em `promptVersion`), `cwd` =
+`claude -p --output-format json --tools "" --disable-slash-commands` (verificado, ver research R13) com a entrada e o roteiro fixo (versão em `promptVersion`), `cwd` =
 `~/.cade-metrics/analysis-cwd/` (vazio, fora do repositório). A transcrição desse subprocesso é
 classificada `analysis-overhead` pela origem e nunca atribuída a nenhuma feature.

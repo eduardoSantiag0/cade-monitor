@@ -131,6 +131,23 @@ Exemplos com valores fictícios. Campos com `?` são opcionais (ausentes = desco
  "accepted":true,"rejectReasons":[],"reportFile":".ai-metrics/reports/007-ai-dev-metrics.md"}
 ```
 
+## Arquivos auxiliares (não fazem parte da cadeia)
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `head.json` | Âncora `{seq, hash}` do último registro reconhecido |
+| `state.json` | `{"sizes": {arquivo: [tamanho, mtime_ns]}, "errors_consumed": n}`; só otimização, apagar é seguro |
+| `errors.log` | Uma linha por falha do hook: `timestamp<TAB>NÍVEL<TAB>contexto<TAB>mensagem` (NÍVEL ∈ DEBUG, INFO, WARNING, ERROR); linhas `ERROR` viram `coverage.gap` `hook-failed` na captura seguinte; o formato antigo `timestamp<TAB>mensagem` é lido como ERROR |
+| `wal.lock` | Trava por `O_EXCL`; uma trava com mais de 60 s é considerada de um processo morto |
+| `config.json` | Sobrescrita opcional dos padrões de `config.default.json` |
+| `analysis-cwd/` | Pasta vazia, fora do repositório, onde roda o `claude -p` da análise |
+
+## Reparo de cauda interrompida
+
+Se o arquivo termina numa linha sem quebra de linha (queda no meio da gravação) **e** a âncora não reconhece esse
+registro, os bytes incompletos são descartados (ou, se o JSON estiver completo, só ganham o `\n`). Se a âncora
+reconhece o registro truncado, nada é alterado e o `verify` falha: isso é perda, não queda.
+
 ## Invariantes (testáveis)
 
 1. Repetir `ingest` sobre a mesma fonte não cria registros (SC-002).

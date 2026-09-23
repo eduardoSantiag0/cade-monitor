@@ -60,12 +60,16 @@ Achados que moldam o desenho:
   e varre todas as transcrições do projeto; é idempotente e sempre sai com código 0.
 - **Por quê**: o formato da entrada do hook no Windows é o item **não verificado** da spec. Ao
   não depender dele, o risco some. Ganho adicional: recupera sessões perdidas por hooks anteriores.
-- **Verificado (T024, parcial)**: o comando gravado pelo `setup` (caminhos absolutos com `/`) roda com exit 0, sem
-  saída, independente do diretório de trabalho e com stdin inválido, tanto pelo bash quanto pelo `cmd.exe`
-  (PowerShell não aceita uma string entre aspas como comando: se o Claude Code usar PowerShell para hooks, o `setup`
-  precisará escrever `& "..."`). **Ainda não verificado**: o disparo real do `Stop` numa sessão nova (o Claude Code lê
-  as configurações ao iniciar), a pasta de trabalho do hook e o formato do stdin; a opção oculta `--dump-stdin`
-  existe para registrar isso uma vez.
+- **Verificado (T024, 2026-09-23, Claude Code 2.1.281, Windows)**: o hook `Stop` instalado pelo `setup` **dispara de
+  verdade**, inclusive numa sessão já aberta (o Claude Code recarregou o `settings.local.json`), a cada fim de turno.
+  O comando roda em bash com o diretório de trabalho = raiz do projeto, e com exit 0, sem saída e independente do cwd
+  também pelo `cmd.exe`. O stdin é um JSON com `session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `prompt_id`,
+  `permission_mode`, `effort`, `hook_event_name` (`Stop`), `stop_hook_active`, `last_assistant_message` (**texto da
+  resposta**: mais um motivo para a ferramenta ignorar o stdin), `background_tasks` e `session_crons`. O stdin vem em
+  UTF-8, enquanto o `sys.stdin` do Python no Windows usa cp1252 por padrão: só importaria se a ferramenta o lesse.
+  A captura pelo hook foi confirmada pelo crescimento do histórico (`verify` OK, `errors.log` vazio). PowerShell não
+  aceita uma string entre aspas como comando: se o Claude Code passar a executar hooks em PowerShell, o `setup`
+  precisará escrever `& "..."`; hoje não é o caso.
 - **Alternativas**: ler `transcript_path` do stdin (depende do formato); ingestão só manual
   (perde dados se o usuário esquecer).
 
@@ -102,7 +106,7 @@ Achados que moldam o desenho:
 ## R8. Idempotência e transcrição incompleta
 
 - **Decisão**: o estado de "já capturado" é reconstruído do próprio histórico (conjunto de
-  `msgId` e de `uuid` de prompts/`turn_duration`). `state.json` guarda só `{arquivo: tamanho}`
+  `msgId` e de `uuid` de prompts/`turn_duration`). `state.json` guarda só `{arquivo: [tamanho, mtime_ns]}`
   para pular arquivos sem mudança (otimização; apagar `state.json` é seguro).
 - Uma resposta só é gravada quando **completa**: todos os `tool_use` dela têm `tool_result`, ou
   ela não é a última do arquivo, ou o modo é `--hook`/`--final`. Isso evita gravar uma resposta
@@ -156,7 +160,7 @@ Achados que moldam o desenho:
 
 ## R12. O que não entra no histórico (privacidade)
 
-- **Comandos `Bash` não são gravados.** O comando é classificado no ingest e só o resultado da
+- **Comandos `Bash` e `PowerShell` não são gravados.** O comando é classificado no ingest e só o resultado da
   classificação fica: `verify: {id, ok}` se casa com um comando de verificação da configuração,
   `git: "commit" | "merge" | ...` se for operação git relevante (usa também `toolUseResult.gitOperation`).
   Motivo: comandos com heredoc carregam conteúdo de arquivo.

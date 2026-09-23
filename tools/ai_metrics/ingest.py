@@ -316,22 +316,37 @@ def save_state(home, state):
     _state_path(home).write_text(json.dumps(state), encoding="utf-8")
 
 
-def log_error(home, message):
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
+
+
+def log_error(home, message, context="ingest --hook", level="ERROR"):
+    """errors.log: `timestamp<TAB>NÍVEL<TAB>contexto<TAB>mensagem` (uma linha por ocorrência)."""
     try:
         Path(home).mkdir(parents=True, exist_ok=True)
+        text = " ".join(str(message).split())
         with open(Path(home) / "errors.log", "a", encoding="utf-8") as fh:
-            fh.write(f"{now_iso()}\t{' '.join(str(message).split())}\n")
+            fh.write(f"{now_iso()}\t{level}\t{context}\t{text}\n")
     except OSError:
         pass
 
 
+def parse_log_line(line):
+    """(ts, nível, contexto, mensagem); aceita o formato antigo `ts<TAB>mensagem` como ERROR."""
+    parts = line.split("\t", 3)
+    if len(parts) == 4 and parts[1] in LOG_LEVELS:
+        return tuple(parts)
+    ts, _, msg = line.partition("\t")
+    return ts, "ERROR", "legado", msg
+
+
 def _pending_errors(home, state):
-    """Falhas do hook ainda não registradas como lacuna: [(ts, texto)]."""
+    """Falhas (nível ERROR) do hook ainda não registradas como lacuna: ([(ts, mensagem)], total_de_linhas)."""
     p = Path(home) / "errors.log"
     if not p.exists():
-        return []
+        return [], 0
     lines = [ln for ln in p.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
-    return [tuple(ln.split("\t", 1)) if "\t" in ln else (ln, "") for ln in lines[state.get("errors_consumed", 0):]], len(lines)
+    parsed = [parse_log_line(ln) for ln in lines[state.get("errors_consumed", 0):]]
+    return [(ts, msg) for ts, level, _ctx, msg in parsed if level == "ERROR"], len(lines)
 
 
 # ---- nascimento de features ----------------------------------------------------------
@@ -491,7 +506,7 @@ def _run_locked(home, repo, projects_dir, final, cfg):
     new_events += _feature_events(repo, cfg, seen, new_events)
 
     # falhas anteriores do hook -> lacunas `hook-failed`
-    pending, total_lines = _pending_errors(home, state) or ([], 0)
+    pending, total_lines = _pending_errors(home, state)
     for ts_err, _msg in pending:
         recovered = any(ev["type"] in ("turn", "prompt") for ev in new_events)  # esta captura preencheu o intervalo
         new_events.append({"type": "coverage.gap", "ts": ts_err, "source": "claude-code", "data": {

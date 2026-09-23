@@ -63,7 +63,7 @@ horizonte do estudo. Leitura integral do histórico a cada relatório é aceitá
 | IV. PostgreSQL em Produção | Nenhum banco novo; o histórico é um arquivo, não um servidor de dados. | ✅ |
 | V. Notificações (regra do nome do bot) | O histórico só guarda metadados numéricos, caminhos e identificadores; nunca texto. Guarda extra: recusa gravar qualquer linha que contenha o valor de `TELEGRAM_BOT_USERNAME` (lido do ambiente/`.env`, nunca gravado). | ✅ |
 | VI. Humanização | N/A (não notifica usuários). Relatórios em português. | ✅ |
-| VII. Portfólio-Ready | Testes automatizados, `--help` descritivo, logs, tratamento explícito de erros (sem silêncio, exceto o modo hook, que registra em `errors.log`). Cobertura de `services/selectors` não se aplica. | ✅ |
+| VII. Portfólio-Ready | Testes automatizados, `--help` descritivo, logs com nível e contexto (`errors.log`: `timestamp<TAB>NÍVEL<TAB>contexto<TAB>mensagem`), tratamento explícito de erros (sem silêncio, exceto o modo hook, que registra em `errors.log`). Cobertura de `services/selectors` não se aplica. | ✅ |
 | VIII. Sem Over-Engineering | Nenhuma dependência Python nova. Cada mecanismo não trivial tem justificativa em Complexity Tracking. | ✅ com justificativas |
 | Workflow 4 (env vars no `.env.example`) | Nenhuma variável de ambiente nova: local do histórico fixo (`~/.cade-metrics`) com `--home` só para testes. | ✅ |
 | Tech Stack Canônico | Não altera nenhuma linha da tabela. | ✅ |
@@ -116,7 +116,8 @@ tools/
         └── test_*.py
 
 .ai-metrics/                 # dados locais: .gitignore e .dockerignore
-└── reports/<featureId>.md
+├── reports/<featureId>.md
+└── analyses/<feature>-<hash>.json   # texto das análises aceitas (ver contracts/analysis-io.md)
 ```
 
 **Versionamento (decisão do dono)**: o código em `tools/ai_metrics/` é **versionado normalmente**.
