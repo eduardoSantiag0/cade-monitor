@@ -67,6 +67,16 @@ flowchart LR
 
 ---
 
+## 🧭 Desenvolvimento
+
+Este projeto utiliza **Spec-Driven Development (SDD)** com o [GitHub Spec Kit](https://github.com/github/spec-kit). As features passam por descoberta, especificação, esclarecimento, planejamento e divisão em tarefas antes da implementação.
+
+📖 **[Veja o workflow completo de desenvolvimento →](docs/spec-driven-development.md)**
+
+O documento mostra o fluxo utilizado no projeto, os comandos do Spec Kit, a constituição, a organização das features e um exemplo real do desenvolvimento da `007-ai-dev-metrics`.
+
+
+
 ## Como funciona
 
 ```
@@ -337,6 +347,7 @@ apps/
   dashboard/       painel web
 specs/             specs, planos e tarefas por feature (Spec Kit)
 tests/             suíte automatizada (SQLite e PostgreSQL 18 no CI)
+tools/ai_metrics/  ferramenta local de métricas de desenvolvimento assistido por IA (fora do app)
 ```
 
 ---
@@ -350,6 +361,41 @@ python manage.py test tests
 O GitHub Actions roda a suíte duas vezes: com SQLite e contra um PostgreSQL 18 real (job
 `test-postgres`), além de checar se falta alguma migration. As chamadas externas (SEI, Bot API,
 SMTP, Evolution) são sempre mockadas.
+
+---
+
+## Métricas de desenvolvimento assistido por IA
+
+Ferramenta **local** (`tools/ai_metrics/`, só biblioteca padrão do Python, fora do app Django e do banco)
+que registra quantos **tokens** e quanto **tempo do agente** o desenvolvimento assistido por IA consome
+por feature, para estudar, de forma observacional, se workflows mais estruturados (Grill Me, Spec Kit)
+compensam frente ao fluxo direto. Spec e plano: `specs/007-ai-dev-metrics/`.
+
+```bash
+python -m tools.ai_metrics setup       # uma única vez: instala o hook Stop e cria ~/.cade-metrics
+git switch -c 008-minha-feature        # a única ação manual por feature; depois é só trabalhar
+python -m tools.ai_metrics report 008-minha-feature --stdout   # relatório da feature
+```
+
+| Comando | O que faz |
+|---|---|
+| `setup [--dry-run\|--check\|--remove]` | Configura o hook `Stop` em `.claude/settings.local.json` (arquivo local) sem tocar no resto do arquivo |
+| `ingest` | Captura o consumo das transcrições (o hook chama isto sozinho; é idempotente) |
+| `verify` | Confere o encadeamento por hash do histórico (detecta edição e remoção) |
+| `report <feature>` / `report --all` | Relatório Markdown: Fatos → Métricas → Análise → Evidências → Limitações |
+| `compare` | Comparação entre workflows (só features observadas e completas; mostra `n` e os vieses) |
+| `timeline` | Features em ordem cronológica, com situação, classe de dado e cobertura |
+| `analyze <feature>` | Análise interpretativa por LLM (só fatos e métricas; validada por código) |
+| `feature use\|correct\|status\|first-pass\|tag`, `gap add`, `backfill` | Declarações e correções: são **eventos novos**, o histórico nunca é editado |
+
+- **Onde ficam os dados:** o histórico (`wal.jsonl`) em `~/.cade-metrics/`, fora do repositório (faça
+  backup por sua conta); os relatórios em `.ai-metrics/reports/`, que está no `.gitignore` e no
+  `.dockerignore`. O código da ferramenta é versionado, mas não vai para a imagem Docker.
+- **Privacidade:** o histórico guarda só números, horários, nomes de ferramentas e caminhos; nunca texto
+  de prompt, de resposta, de arquivo nem comandos, e nenhum valor em dinheiro.
+- **Como ler os números:** são mínimos observados (`≥`); ausência de medição é `unknown`, nunca `0`; não
+  há afirmação causal. Testes: `python -m unittest discover -s tools/ai_metrics/tests -t .`
+  (ou `make metrics-test`).
 
 ---
 

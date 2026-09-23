@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install migrate superuser run worker test check collectstatic clean digest backup
+.PHONY: help install migrate superuser run worker test metrics-test check collectstatic clean digest backup
 
 # ---------------------------------------------------------------------------
 # Configuração
@@ -20,6 +20,7 @@ help:
 	@echo "  make run            Inicia o servidor de desenvolvimento"
 	@echo "  make worker         Inicia o worker de monitoramento"
 	@echo "  make test           Roda todos os testes"
+	@echo "  make metrics-test   Roda os testes da ferramenta de métricas (tools/ai_metrics)"
 	@echo "  make check          Verifica configuração Django"
 	@echo "  make collectstatic  Coleta arquivos estáticos"
 	@echo "  make clean          Remove __pycache__ e .pyc"
@@ -47,6 +48,9 @@ worker:
 
 test:
 	$(MANAGE) test tests --verbosity=2
+
+metrics-test:
+	$(PYTHON) -m unittest discover -s tools/ai_metrics/tests -t . -v
 
 check:
 	$(MANAGE) check

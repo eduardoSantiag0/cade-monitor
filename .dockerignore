@@ -14,3 +14,7 @@ venv/
 staticfiles/
 .vscode/
 .idea/
+
+# Ferramenta de métricas de desenvolvimento (spec 007): nem o código nem os dados vão para a imagem.
+.ai-metrics/
+tools/ai_metrics/
