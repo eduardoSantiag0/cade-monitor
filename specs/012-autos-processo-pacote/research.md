@@ -91,3 +91,32 @@ exercitar pelo menos um caso de documento sem link (se existir um processo real 
 mão) — confirmar que `extract_document_links` sobre o HTML fresco da página encontra as mesmas
 URLs que `download_document` já usa hoje para anexos de notificação (é a mesma função, mas vale
 confirmar o fluxo ponta a ponta pelo menos uma vez contra dado real).
+
+## Correção pós-implementação (validação ao vivo, 2026-09-28)
+
+**2 chamadas reais** contra o processo público `08700.005905/2026-38` (já usado como exemplo na
+feature 008):
+
+1. `get_snapshot` + `extract_protocol_records` + `extract_document_links`: 23 documentos
+   declarados na Lista de Protocolos, **23 com link resolvido** — nenhum caso de "sem link" nesse
+   processo específico (não foi possível validar ao vivo o caminho de placeholder/divergência
+   contra dado real; ficou coberto só pelos fixtures de teste, como o quickstart.md já previa como
+   possibilidade).
+2. `download_document` no primeiro documento (`1773551`, "Notificação"): baixou com sucesso —
+   `1773551-Notificacao.pdf`, `application/pdf`, 393.873 bytes.
+
+**Divergência encontrada e corrigida ANTES desta rodada** (durante a escrita dos fixtures de
+teste, não contra a fonte real): os fixtures HTML originais usavam um padrão de URL inventado
+(`documento.php?id=...`), que não batia com nenhum dos marcadores reais que
+`extract_document_links`/`_looks_like_document_url` exigem
+(`md_pesq_documento_consulta_externa.php`, `documento_consulta_externa`,
+`documento_download_anexo`, `controlador.php?acao=documento`, definidos em
+`apps/monitoring/extractors.py::DOCUMENT_LINK_MARKERS`) — os testes automatizados pegaram isso
+imediatamente (todo link saía vazio, todo pacote "divergia"), antes mesmo da validação ao vivo.
+Fixtures corrigidos para usar `md_pesq_documento_consulta_externa.php?id_documento=...`, o mesmo
+padrão confirmado agora contra o processo real.
+
+**Nenhuma divergência entre o assumido em `builder.py`/`services.py` e o comportamento real das
+funções já existentes de `apps/monitoring/clients.py`** — `get_snapshot`, `extract_document_links`
+e `download_document` se comportaram exatamente como o contrato já documentava, sem necessidade de
+ajuste em `apps/autos/`.

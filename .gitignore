@@ -59,6 +59,7 @@ data/*.sqlite3*
 data/evolution/
 data/evolution-postgres/
 data/evolution-redis/
+data/media/
 
 # Artefatos gerados pela Evolution API dentro de logs/ (ex.: routers/controllers
 # copiados do container) não são código do projeto e não devem ser versionados.

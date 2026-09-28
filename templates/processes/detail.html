@@ -145,6 +145,29 @@
 
 <section>
   <div class="section-head">
+    <h2>Autos (documentos públicos)</h2>
+  </div>
+  {% if autos_job.status == 'ready' %}
+    <p>
+      Pacote pronto ({{ autos_job.total_processed }} documento(s)).
+      <a href="{% url 'processes:autos_download' process.pk autos_job.pk %}" class="btn btn-light btn-sm">Baixar ZIP</a>
+    </p>
+  {% elif autos_job.status == 'queued' %}
+    <p class="muted">Pedido na fila, aguardando processamento.</p>
+  {% elif autos_job.status == 'processing' %}
+    <p class="muted">
+      Montando pacote... {{ autos_job.total_processed }}{% if autos_job.total_declared %}/{{ autos_job.total_declared }}{% endif %} documento(s).
+    </p>
+  {% else %}
+    <form method="post" action="{% url 'processes:autos_request' process.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-light btn-sm">Montar pacote de autos (ZIP)</button>
+    </form>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head">
     <h2>Assinantes ({{ subscriptions.count }})</h2>
     <a href="{% url 'subscribers:list' %}" class="btn btn-light btn-sm">Gerenciar assinantes</a>
   </div>

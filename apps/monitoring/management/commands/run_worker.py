@@ -163,7 +163,18 @@ class Command(BaseCommand):
                 logger.error('[worker] Erro em %s: %s', agenda_step.__name__, exc, exc_info=True)
                 sentry_sdk.capture_exception(exc)
 
-        # 6. Notificações pendentes — sempre, não só em ciclos com processos vencidos
+        # 6. Pacote de autos (spec 012): avança um job por vez, em fatias de
+        #    AUTOS_MAX_DOCUMENTS_PER_TICK documentos, para não monopolizar o ciclo.
+        from apps.autos.services import run_pending_packages
+        try:
+            result = run_pending_packages(timezone.now())
+            if result.get('processed') or result.get('expired'):
+                logger.info('[worker] run_pending_packages: %s', result)
+        except Exception as exc:
+            logger.error('[worker] Erro em run_pending_packages: %s', exc, exc_info=True)
+            sentry_sdk.capture_exception(exc)
+
+        # 7. Notificações pendentes — sempre, não só em ciclos com processos vencidos
         #    (mudanças achadas por /check e retentativas também precisam sair).
         try:
             stats = send_pending_notifications()

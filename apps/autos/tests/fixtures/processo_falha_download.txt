@@ -1,0 +1,35 @@
+Processo: 08700.009004/2027-01
+Tipo de Processo: Finalístico: Ato de Concentração Ordinário
+Requerentes(s): Empresa A e Empresa B
+
+Lista de Protocolos
+4000001
+Notificação
+04/01/2027
+04/01/2027
+SG
+4000002
+Edital
+11/01/2027
+11/01/2027
+SG
+4000003
+Parecer Técnico
+12/01/2027
+12/01/2027
+SG
+4000004
+Despacho
+25/01/2027
+25/01/2027
+SG
+4000005
+Certidão
+16/02/2027
+16/02/2027
+SG
+
+Lista de Andamentos
+20/01/2027 10:00
+SG
+Documento 4000003 indisponível temporariamente para download.

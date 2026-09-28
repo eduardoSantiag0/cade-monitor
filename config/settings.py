@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'apps.subscribers.apps.SubscribersConfig',
     'apps.dou.apps.DouConfig',
     'apps.agenda.apps.AgendaConfig',
+    'apps.autos.apps.AutosConfig',
     'apps.dashboard.apps.DashboardConfig',
     'apps.telegram_bot.apps.TelegramBotConfig',
 ]
@@ -118,6 +119,10 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+# Arquivos gerados sob demanda (pacotes de autos) — dentro de data/, o volume já
+# persistente e compartilhado entre os containers web/worker (docker-compose.yml).
+# Nunca servido como estático: só por view autenticada (FileResponse).
+MEDIA_ROOT = BASE_DIR / 'data' / 'media'
 # Em produção (DEBUG=False), WhiteNoise comprime e adiciona hash ao nome dos arquivos.
 # Em desenvolvimento, usa o storage padrão para não exigir collectstatic a cada alteração.
 if not DEBUG:
@@ -203,6 +208,12 @@ AGENDA_CALENDAR_SYNC_INTENSIVE_INTERVAL_SECONDS = env.agenda_calendar_sync_inten
 AGENDA_CALENDAR_SYNC_CONFIRMED_INTERVAL_SECONDS = env.agenda_calendar_sync_confirmed_interval_seconds
 AGENDA_AUTO_CLOSURE_DAYS = env.agenda_auto_closure_days
 AGENDA_LAST_CHECK_MAX_AGE_SECONDS = env.agenda_last_check_max_age_seconds
+
+# Pacote de autos — documentos públicos (spec 012): expiração do ZIP pronto e limite de
+# documentos processados por ciclo do worker (um job grande não pode monopolizar o
+# _run_cycle inteiro, que também precisa atender processos/notificações/dou/agenda).
+AUTOS_PACKAGE_TTL_SECONDS = env.autos_package_ttl_seconds
+AUTOS_MAX_DOCUMENTS_PER_TICK = env.autos_max_documents_per_tick
 
 # Cache compartilhado entre o processo web (Gunicorn) e o worker (containers separados) —
 # backend em banco (portável Postgres/SQLite, sem dependência nova). Tabela criada por

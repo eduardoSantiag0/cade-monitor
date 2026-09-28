@@ -110,6 +110,10 @@ class EnvSettings(BaseModel):
     agenda_auto_closure_days: int = 10
     agenda_last_check_max_age_seconds: int = 2 * 86400
 
+    # Pacote de autos — documentos públicos (spec 012)
+    autos_package_ttl_seconds: int = 7 * 86400
+    autos_max_documents_per_tick: int = 1
+
     # Logging
     log_level: str = 'INFO'
 
@@ -363,6 +367,8 @@ class EnvSettings(BaseModel):
             'agenda_calendar_sync_confirmed_interval_seconds',
             'agenda_auto_closure_days', 'agenda_last_check_max_age_seconds',
         ):
+            _set(field, field.upper(), cls.model_fields[field].default)
+        for field in ('autos_package_ttl_seconds', 'autos_max_documents_per_tick'):
             _set(field, field.upper(), cls.model_fields[field].default)
         _set('log_level', 'LOG_LEVEL', cls.model_fields['log_level'].default)
         _set('sentry_dsn', 'SENTRY_DSN', cls.model_fields['sentry_dsn'].default)
