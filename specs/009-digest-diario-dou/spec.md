@@ -132,9 +132,12 @@ publicado. Verifica-se o texto e a lista de itens faltantes no e-mail gerado.
 
 - Assinante cadastrado no digest do DOU mas com envio de e-mail pausado/silenciado (recurso já
   existente no sistema) não deve receber nenhum dos três e-mails enquanto durar a pausa.
-- Duas fontes concorrentes (Resenha e in.gov.br) descrevendo o mesmo item com pequenas diferenças
-  de texto: o item é tratado como um único item no e-mail (nunca duplicado), usando a fonte que
-  efetivamente respondeu.
+- A mesma fonte listando o mesmo item mais de uma vez (ex.: a listagem do in.gov.br repetindo um
+  artigo agrupado em mais de uma linha do índice, ou um edital citado duas vezes na Resenha): o
+  item aparece uma única vez no e-mail, nunca duplicado. Como a busca usa uma fonte por vez
+  (Resenha OU, na indisponibilidade dela, a listagem in.gov.br — nunca as duas na mesma execução
+  do digest), a deduplicação é sempre dentro da fonte que respondeu naquele dia, não entre fontes
+  diferentes.
 - Item do DOU citando mais de um número de processo: o sistema usa a primeira referência tipada
   (ex.: "Processo Administrativo nº ...") como identificação do item para fins de deduplicação e
   do "exceto" da confirmação da manhã.
@@ -200,8 +203,10 @@ publicado. Verifica-se o texto e a lista de itens faltantes no e-mail gerado.
   pausado.
 - **FR-015**: O sistema MUST enviar os três tipos de e-mail exclusivamente por e-mail nesta
   versão (não Telegram, não WhatsApp).
-- **FR-016**: O sistema MUST deduplicar itens que aparecem em mais de uma fonte (Resenha e
-  listagem do DOU) referentes à mesma publicação, tratando-os como um único item no e-mail.
+- **FR-016**: O sistema MUST deduplicar itens repetidos dentro da mesma fonte de um dia (ex.: a
+  listagem do in.gov.br citando o mesmo artigo em mais de uma linha do índice), tratando-os como
+  um único item no e-mail. Não se aplica deduplicação entre Resenha e listagem do DOU: a busca do
+  digest usa uma fonte por vez (fallback, nunca as duas juntas na mesma execução — ver FR-003).
 
 ### Key Entities *(include if feature involves data)*
 

@@ -98,66 +98,75 @@ enviados e os registros em `DouSendLog`.
 
 - [ ] T013 [P] [US1] Criar fixtures em `apps/dou/tests/fixtures/`: `resenha_com_publicacoes.json`
   (1 edital + 2 despachos citando "Ato de Concentração nº 08700.001234/2026-11", um despacho longo
-  o bastante para truncar), `resenha_vazia.json` (sem publicações do CADE),
-  `ingov_listing_com_publicacoes.json` (mesmo conteúdo do primeiro fixture, no formato bruto da
-  listagem in.gov.br, incluindo itens de outros órgãos para exercitar o filtro por CADE).
+  o bastante para truncar, e uma pauta/ata do dia com link), `resenha_vazia.json` (sem publicações
+  do CADE), `ingov_listing_com_publicacoes.json` (mesmo conteúdo do primeiro fixture, no formato
+  bruto da listagem in.gov.br, incluindo itens de outros órgãos para exercitar o filtro por CADE e
+  o mesmo artigo agrupado repetido em duas linhas do índice, para exercitar a deduplicação
+  intra-fonte de FR-016).
 - [ ] T014 [P] [US1] Teste em `apps/dou/tests/test_parsers.py`: `parse_resenha_html` (ou o parser
   que ler o fixture JSON/HTML da Resenha) extrai editais/despachos no formato normalizado
   `{'editais': [...], 'despachos': [...], 'atas': [...]}`.
 - [ ] T015 [P] [US1] Teste em `apps/dou/tests/test_parsers.py`: `parse_ingov_listing` filtra
-  itens para incluir só os que citam o CADE (campo de hierarquia/órgão), descartando os demais, e
-  produz o mesmo formato normalizado de T014.
+  itens para incluir só os que citam o CADE (campo de hierarquia/órgão), descartando os demais,
+  produz o mesmo formato normalizado de T014, **e** deduplica o artigo repetido do fixture T013
+  (FR-016) — o mesmo item nunca aparece duas vezes na lista de saída.
 - [ ] T016 [P] [US1] Teste em `apps/dou/tests/test_render.py`: `render_digest_text`/
   `render_digest_html` colocam o título do caso e os nomes de partes em negrito/destaque
   estrutural, e o despacho longo do fixture sai truncado (início + "(...)" + conclusão).
 - [ ] T017 [P] [US1] Teste em `apps/dou/tests/test_render.py`: um termo monitorado presente no
   texto de um item faz esse bloco sair com marcação de destaque (ex. `background-color` no HTML);
   o mesmo item, para um assinante sem esse termo, sai sem destaque.
-- [ ] T018 [P] [US1] Teste em `apps/dou/tests/test_render.py`: dia sem nenhuma publicação produz
+- [ ] T018 [P] [US1] Teste em `apps/dou/tests/test_render.py` (FR-007): a pauta/ata do fixture
+  T013 aparece no rodapé do e-mail com título e link para o DOU; um segundo cenário, com o mesmo
+  item mas sem URL disponível, aparece só com o título (sem link quebrado), conforme o Edge Case
+  da spec.
+- [ ] T019 [P] [US1] Teste em `apps/dou/tests/test_render.py`: dia sem nenhuma publicação produz
   uma mensagem explícita de "sem publicações" (não uma seção vazia silenciosa).
-- [ ] T019 [P] [US1] Teste em `apps/dou/tests/test_clients.py` (mock de `urlopen`):
+- [ ] T020 [P] [US1] Teste em `apps/dou/tests/test_clients.py` (mock de `urlopen`):
   `fetch_resenha` retorna `None` quando a resposta indica que a Resenha do dia ainda não está
   disponível (sem lançar exceção); levanta `FetchError` em erro de rede/timeout.
-- [ ] T020 [P] [US1] Teste em `apps/dou/tests/test_services.py`: `run_digest_window` fora da
+- [ ] T021 [P] [US1] Teste em `apps/dou/tests/test_services.py`: `run_digest_window` fora da
   janela diária configurada (`DOU_DIGEST_WINDOW_START`/`_END`) não faz nenhuma chamada HTTP
   (mock) e retorna `{'skipped': True, ...}`.
-- [ ] T021 [P] [US1] Teste em `apps/dou/tests/test_services.py`: dentro da janela, com a Resenha
+- [ ] T022 [P] [US1] Teste em `apps/dou/tests/test_services.py`: dentro da janela, com a Resenha
   disponível (fixture T013), `run_digest_window` envia exatamente 1 e-mail por assinante ativo
   (mock de `send_email_notification`) e grava 1 `DouSendLog(kind='digest')` por assinante.
-- [ ] T022 [P] [US1] Teste em `apps/dou/tests/test_services.py`: chamar `run_digest_window` duas
+- [ ] T023 [P] [US1] Teste em `apps/dou/tests/test_services.py`: chamar `run_digest_window` duas
   vezes no mesmo dia (já com `DouSendLog` gravado da primeira vez) não envia um segundo e-mail
   (idempotência, FR-005/FR-012).
-- [ ] T023 [P] [US1] Teste em `apps/dou/tests/test_services.py`: quando `fetch_resenha` retorna
+- [ ] T024 [P] [US1] Teste em `apps/dou/tests/test_services.py`: quando `fetch_resenha` retorna
   `None`, `run_digest_window` tenta `fetch_ingov_listing` (mock) e usa o resultado dela para
   montar e enviar o digest.
-- [ ] T024 [P] [US1] Teste em `apps/dou/tests/test_services.py`: assinante com
+- [ ] T025 [P] [US1] Teste em `apps/dou/tests/test_services.py`: assinante com
   `subscriber.silent_mode=True` (ou `paused_until` no futuro) não recebe e-mail, mesmo estando
   `DouSubscription.enabled=True` (FR-014, reaproveitando `Subscriber.is_reachable()`).
 
 ### Implementation for User Story 1
 
-- [ ] T025 [US1] Implementar `fetch_resenha(date, timeout, user_agent)` e
+- [ ] T026 [US1] Implementar `fetch_resenha(date, timeout, user_agent)` e
   `fetch_ingov_listing(date, timeout, user_agent)` em `apps/dou/clients.py`, usando o helper HTTP
   de T009. *(depende de T009)*
-- [ ] T026 [US1] Implementar `parse_resenha_html` / `parse_ingov_listing` (+ filtro por CADE) em
-  `apps/dou/parsers.py`, produzindo o formato normalizado `{'editais', 'despachos', 'atas'}`
-  consumido por `render.py` independentemente da fonte. *(depende de T014, T015)*
-- [ ] T027 [US1] Implementar `render_digest_text` / `render_digest_html` em `apps/dou/render.py`:
+- [ ] T027 [US1] Implementar `parse_resenha_html` / `parse_ingov_listing` (+ filtro por CADE +
+  deduplicação intra-fonte de itens repetidos, FR-016) em `apps/dou/parsers.py`, produzindo o
+  formato normalizado `{'editais', 'despachos', 'atas'}` consumido por `render.py`
+  independentemente da fonte. *(depende de T014, T015)*
+- [ ] T028 [US1] Implementar `render_digest_text` / `render_digest_html` em `apps/dou/render.py`:
   negrito de título/partes, truncamento de despacho longo (início + conclusão), destaque por
   termo monitorado (fold sem acento/caixa, fronteira de palavra), rodapé com pautas/atas do dia
-  (título + link, sem PDF), e mensagem específica para dia sem publicação. *(depende de T016,
-  T017, T018)*
-- [ ] T028 [US1] Implementar `run_digest_window(now)` em `apps/dou/services.py`: `_should_fetch`
-  (T010) → `fetch_resenha` → fallback `fetch_ingov_listing` (T025) → `parsers` (T026) →
-  `render` (T027) → para cada assinatura de `active_digest_subscriptions()` (T008) não marcada em
+  (título + link quando disponível, só título quando não, sem PDF), e mensagem específica para dia
+  sem publicação. *(depende de T016, T017, T018, T019)*
+- [ ] T029 [US1] Implementar `run_digest_window(now)` em `apps/dou/services.py`: `_should_fetch`
+  (T010) → `fetch_resenha` → fallback `fetch_ingov_listing` (T026) → `parsers` (T027) →
+  `render` (T028) → para cada assinatura de `active_digest_subscriptions()` (T008) não marcada em
   `already_sent` (T008) e com `subscriber.is_reachable()`, chama
-  `send_email_notification` (`apps/notifications/channels/email.py`) e grava `DouSendLog`; nunca
-  lança exceção para o chamador (captura e loga, conta em `failed`). *(depende de T025, T026,
-  T027)*
-- [ ] T029 [US1] Integrar `run_digest_window` em `apps/monitoring/management/commands/
+  `send_email_notification` (`apps/notifications/channels/email.py`) e grava `DouSendLog` com
+  `status='sent'` em sucesso ou `status='failed'`+`error` em falha (nunca omite o registro,
+  SC-003); nunca lança exceção para o chamador (captura e loga, conta em `failed`). *(depende de
+  T026, T027, T028)*
+- [ ] T030 [US1] Integrar `run_digest_window` em `apps/monitoring/management/commands/
   run_worker.py::_run_cycle`, entre o passo 2 (processos vencidos) e o passo 3 (notificações
   pendentes), no mesmo padrão try/except + `sentry_sdk.capture_exception` + log dos passos já
-  existentes (ver contracts/dou-services.md). *(depende de T028)*
+  existentes (ver contracts/dou-services.md). *(depende de T029)*
 
 **Checkpoint**: US1 completo e testável isoladamente — `python manage.py test apps.dou` cobre o
 digest diário de ponta a ponta, e o worker já dispara o digest em produção/dev.
@@ -176,37 +185,44 @@ repetidamente e conferir os e-mails e o `DouAnticipation` persistido.
 
 ### Tests for User Story 2
 
-- [ ] T030 [P] [US2] Fixture em `apps/dou/tests/fixtures/sei_boletim_dois_andamentos.json`
+- [ ] T031 [P] [US2] Fixture em `apps/dou/tests/fixtures/sei_boletim_dois_andamentos.json`
   (2 andamentos relevantes) e `sei_boletim_um_andamento_novo.json` (os mesmos 2 + 1 novo).
-- [ ] T031 [P] [US2] Teste em `apps/dou/tests/test_services.py`: assinante com
+- [ ] T032 [P] [US2] Teste em `apps/dou/tests/test_services.py`: assinante com
   `nextday_enabled=True` e `now` já passado do `nextday_time` configurado recebe, na primeira
-  chamada de `run_anticipation_window`, um e-mail com os 2 andamentos do fixture T030, e um
+  chamada de `run_anticipation_window`, um e-mail com os 2 andamentos do fixture T031, e um
   `DouAnticipation(reference_date=amanhã)` é gravado com esses itens.
-- [ ] T032 [P] [US2] Teste em `apps/dou/tests/test_services.py`: uma segunda chamada de
+- [ ] T033 [P] [US2] Teste em `apps/dou/tests/test_services.py`: uma segunda chamada de
   `run_anticipation_window`, ainda no mesmo dia e antes de `DOU_ANTICIPATION_CUTOFF`, usando o
-  fixture com o item novo (T030), envia um e-mail complementar contendo **só** o item novo (sem
+  fixture com o item novo (T031), envia um e-mail complementar contendo **só** o item novo (sem
   repetir os 2 já antecipados), e atualiza o `DouAnticipation` existente.
-- [ ] T033 [P] [US2] Teste em `apps/dou/tests/test_services.py`: nenhum andamento relevante no
+- [ ] T034 [P] [US2] Teste em `apps/dou/tests/test_services.py`: nenhum andamento relevante no
   boletim do SEI → o assinante recebe um e-mail curto de "sem publicações previstas" no horário
   configurado (não a ausência de e-mail).
-- [ ] T034 [P] [US2] Teste em `apps/dou/tests/test_services.py`: assinante com
+- [ ] T035 [P] [US2] Teste em `apps/dou/tests/test_services.py`: assinante com
   `nextday_enabled=False` nunca recebe e-mail de antecipação, mesmo com andamentos relevantes no
   boletim do SEI.
-- [ ] T035 [P] [US2] Teste em `apps/dou/tests/test_services.py`: chamada de
+- [ ] T036 [P] [US2] Teste em `apps/dou/tests/test_services.py` (FR-012/SC-002): chamar
+  `run_anticipation_window` duas vezes seguidas sem que o boletim do SEI tenha mudado (sem item
+  novo) não reenvia nenhum e-mail nem atualiza `DouAnticipation` além do já gravado — mesma
+  garantia de idempotência de T023, agora para a antecipação.
+- [ ] T037 [P] [US2] Teste em `apps/dou/tests/test_services.py` (FR-014): assinante com
+  `subscriber.silent_mode=True` e `nextday_enabled=True` não recebe e-mail de antecipação, mesmo
+  com andamentos relevantes no boletim do SEI — mesma garantia de T025, agora para a antecipação.
+- [ ] T038 [P] [US2] Teste em `apps/dou/tests/test_services.py`: chamada de
   `run_anticipation_window` depois de `DOU_ANTICIPATION_CUTOFF` não gera mais nenhum e-mail
   complementar, mesmo com itens novos no boletim.
 
 ### Implementation for User Story 2
 
-- [ ] T036 [US2] Implementar `run_anticipation_window(now)` em `apps/dou/services.py`,
+- [ ] T039 [US2] Implementar `run_anticipation_window(now)` em `apps/dou/services.py`,
   reaproveitando a extração de andamentos já existente em `apps/monitoring/extractors.py` sobre o
   boletim do SEI (mesma fonte que o monitoramento de processo já lê); usa `render_pubdou_text`/
-  `_html` (T037) e persiste/atualiza `DouAnticipation`; nunca lança exceção para o chamador.
-  *(depende de T008)*
-- [ ] T037 [US2] Implementar `render_pubdou_text` / `render_pubdou_html` (antecipação e
-  complemento) em `apps/dou/render.py`, reaproveitando o mesmo motor de negrito/destaque de T027.
-- [ ] T038 [US2] Integrar `run_anticipation_window` em `_run_cycle` (mesmo bloco de T029, logo
-  após `run_digest_window`). *(depende de T036)*
+  `_html` (T040) e persiste/atualiza `DouAnticipation`; grava `DouSendLog` (sucesso ou falha,
+  mesma garantia de T029) para cada envio; nunca lança exceção para o chamador. *(depende de T008)*
+- [ ] T040 [US2] Implementar `render_pubdou_text` / `render_pubdou_html` (antecipação e
+  complemento) em `apps/dou/render.py`, reaproveitando o mesmo motor de negrito/destaque de T028.
+- [ ] T041 [US2] Integrar `run_anticipation_window` em `_run_cycle` (mesmo bloco de T030, logo
+  após `run_digest_window`). *(depende de T039)*
 
 **Checkpoint**: US2 completo — antecipação e complemento funcionam de ponta a ponta, sem afetar o
 digest de US1.
@@ -225,33 +241,40 @@ conferir o texto/lista gerada.
 
 ### Tests for User Story 3
 
-- [ ] T039 [P] [US3] Teste em `apps/dou/tests/test_services.py`: `DouAnticipation` com 3 itens e
+- [ ] T042 [P] [US3] Teste em `apps/dou/tests/test_services.py`: `DouAnticipation` com 3 itens e
   DOU real (fixture) confirmando os 3 → e-mail de confirmação lista os 3 com o texto do DOU real,
   linguagem "todos os andamentos abaixo".
-- [ ] T040 [P] [US3] Teste em `apps/dou/tests/test_services.py`: `DouAnticipation` com 2 itens e
+- [ ] T043 [P] [US3] Teste em `apps/dou/tests/test_services.py`: `DouAnticipation` com 2 itens e
   DOU real confirmando só 1 → e-mail menciona explicitamente o item faltante ("... exceto
   [referência]").
-- [ ] T041 [P] [US3] Teste em `apps/dou/tests/test_services.py`: `DouAnticipation` com exatamente
+- [ ] T044 [P] [US3] Teste em `apps/dou/tests/test_services.py`: `DouAnticipation` com exatamente
   1 item não publicado → texto usa concordância singular ("o andamento abaixo ...").
-- [ ] T042 [P] [US3] Teste em `apps/dou/tests/test_services.py`: DOU real do dia sem nenhuma
+- [ ] T045 [P] [US3] Teste em `apps/dou/tests/test_services.py`: DOU real do dia sem nenhuma
   publicação do CADE → e-mail de aviso curto, sem a linguagem de "todos os itens abaixo".
-- [ ] T043 [P] [US3] Teste em `apps/dou/tests/test_services.py`: assinante sem `DouAnticipation`
+- [ ] T046 [P] [US3] Teste em `apps/dou/tests/test_services.py`: assinante sem `DouAnticipation`
   para a data de hoje (não habilitou US2, ou não havia nada a antecipar) não recebe e-mail de
   confirmação.
+- [ ] T047 [P] [US3] Teste em `apps/dou/tests/test_services.py` (FR-012/SC-002): chamar
+  `run_confirmation_window` duas vezes no mesmo dia não envia um segundo e-mail de confirmação
+  para o mesmo assinante — mesma garantia de T023/T036, agora para a confirmação.
+- [ ] T048 [P] [US3] Teste em `apps/dou/tests/test_services.py` (FR-014): assinante com
+  `subscriber.paused_until` no futuro não recebe e-mail de confirmação, mesmo tendo uma
+  `DouAnticipation` pendente de confirmar — mesma garantia de T025/T037, agora para a confirmação.
 
 ### Implementation for User Story 3
 
-- [ ] T044 [US3] Implementar `run_confirmation_window(now)` em `apps/dou/services.py`: para cada
+- [ ] T049 [US3] Implementar `run_confirmation_window(now)` em `apps/dou/services.py`: para cada
   `DouAnticipation` de hoje, busca o DOU real do dia (reaproveita `fetch_resenha`/
-  `fetch_ingov_listing` de T025, com o próprio `DouFetchState` — não compete pela cadência de
+  `fetch_ingov_listing` de T026, com o próprio `DouFetchState` — não compete pela cadência de
   `run_digest_window`), compara itens antecipados × publicados por referência de processo, monta
-  a lista de faltantes, chama `render_confirmation_text`/`_html` (T045) e envia; grava
-  `DouSendLog(kind='pubdou_conf')`. *(depende de T025, T036)*
-- [ ] T045 [US3] Implementar `render_confirmation_text` / `render_confirmation_html` em
+  a lista de faltantes, chama `render_confirmation_text`/`_html` (T050) e envia; grava
+  `DouSendLog(kind='pubdou_conf')` (sucesso ou falha, mesma garantia de T029/T039). *(depende de
+  T026, T039)*
+- [ ] T050 [US3] Implementar `render_confirmation_text` / `render_confirmation_html` em
   `apps/dou/render.py`, com a concordância singular/plural e a mensagem específica de "nada
   publicado" (FR-010/FR-011).
-- [ ] T046 [US3] Integrar `run_confirmation_window` em `_run_cycle` (mesmo bloco de T029/T038,
-  logo após `run_anticipation_window`). *(depende de T044)*
+- [ ] T051 [US3] Integrar `run_confirmation_window` em `_run_cycle` (mesmo bloco de T030/T041,
+  logo após `run_anticipation_window`). *(depende de T049)*
 
 **Checkpoint**: US3 completo — o ciclo antecipação → confirmação funciona de ponta a ponta.
 
@@ -259,16 +282,16 @@ conferir o texto/lista gerada.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T047 Rodar `python manage.py test apps.dou apps.monitoring` e confirmar toda a suíte
+- [ ] T052 Rodar `python manage.py test apps.dou apps.monitoring` e confirmar toda a suíte
   (existente + nova) passando (quickstart.md, passo 1).
-- [ ] T048 Validar manualmente contra as fontes reais seguindo `quickstart.md` passo 3 (1-2
+- [ ] T053 Validar manualmente contra as fontes reais seguindo `quickstart.md` passo 3 (1-2
   chamadas reais à Resenha e à listagem in.gov.br — nunca em loop). Documentar qualquer
   divergência entre o formato real e o assumido em `parsers.py` numa seção "Correção
   pós-implementação" em `research.md`, seguindo o modelo de
   `specs/008-endurecer-scraper-sei/research.md` item 6; ajustar `parsers.py` se necessário.
-- [ ] T049 [P] Validar `quickstart.md` passo 4 (cadência de 5 min + janela diária) com o comando
+- [ ] T054 [P] Validar `quickstart.md` passo 4 (cadência de 5 min + janela diária) com o comando
   de teste indicado.
-- [ ] T050 [P] Revisar `.env.example` e a seção do README sobre o worker (se existir) para
+- [ ] T055 [P] Revisar `.env.example` e a seção do README sobre o worker (se existir) para
   mencionar as novas variáveis `DOU_*` de T003/T004.
 
 ---
@@ -283,20 +306,20 @@ conferir o texto/lista gerada.
 - **User Story 1 (Phase 3)**: depende só da Foundational — pode ser entregue sozinha como MVP.
 - **User Story 2 (Phase 4)**: depende só da Foundational (T008-T010), não de US1 (motor de
   formatação é compartilhado por composição, não por dependência de código entre fases).
-- **User Story 3 (Phase 5)**: depende da Foundational **e** de US1 (T025, busca do DOU real) e de
-  US2 (T036, é o que produz o `DouAnticipation` que a confirmação lê).
+- **User Story 3 (Phase 5)**: depende da Foundational **e** de US1 (T026, busca do DOU real) e de
+  US2 (T039, é o que produz o `DouAnticipation` que a confirmação lê).
 - **Polish (Phase 6)**: depende de todas as histórias desejadas estarem completas.
 
 ### Parallel Opportunities
 
 - T003/T004 (Setup) podem rodar em paralelo com T001/T002.
 - Dentro da Foundational: T007-T012 podem rodar em paralelo entre si depois de T005/T006.
-- Todos os testes de uma mesma história marcados `[P]` (T013-T024, T030-T035, T039-T043) podem
+- Todos os testes de uma mesma história marcados `[P]` (T013-T025, T031-T038, T042-T048) podem
   ser escritos em paralelo entre si.
 - US1 e US2 podem ser implementadas em paralelo por pessoas diferentes assim que a Foundational
   terminar — não compartilham arquivo de implementação além de `services.py`/`render.py` (exigem
   coordenação de merge, mas sem dependência lógica).
-- US3 só pode começar depois de US1 (T025) e US2 (T036) estarem prontas.
+- US3 só pode começar depois de US1 (T026) e US2 (T039) estarem prontas.
 
 ---
 
@@ -305,7 +328,7 @@ conferir o texto/lista gerada.
 ### MVP First (User Story 1)
 
 1. Completar Setup (T001-T004) e Foundational (T005-T012).
-2. Completar User Story 1 (T013-T029).
+2. Completar User Story 1 (T013-T030).
 3. Rodar `python manage.py test apps.dou` e validar `quickstart.md` passos 1-2.
 4. Esse já é o ganho mais caro (spec.md: User Story 1 é P1 — sem ela não há digest algum).
 
@@ -327,4 +350,10 @@ conferir o texto/lista gerada.
   de `apps/monitoring/clients.py`) — nunca chamar `urllib.request.urlopen` diretamente.
 - `run_digest_window`, `run_anticipation_window` e `run_confirmation_window` nunca lançam exceção
   para `run_worker` — cada uma captura e loga suas próprias falhas (ver contracts/dou-services.md).
+- Deduplicação (FR-016) é sempre intra-fonte (a mesma fonte listando o mesmo item duas vezes),
+  nunca entre Resenha e in.gov.br — o design de fallback (FR-003) nunca consulta as duas na mesma
+  execução, então esse cenário não pode ocorrer.
+- FR-012/FR-014 (idempotência e respeito à pausa) valem para os três tipos de envio — cada história
+  tem seu próprio par de testes (T023/T025 em US1, T036/T037 em US2, T047/T048 em US3) em vez de
+  assumir que a garantia de uma fase cobre as outras.
 - Parar em qualquer checkpoint acima já entrega valor de forma independente e testável.
