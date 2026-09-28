@@ -1,0 +1,30 @@
+Processo: 08700.001234/2027-11
+Tipo de Processo: Finalístico: Ato de Concentração Sumário
+Requerentes(s): Empresa A e Empresa B
+
+Lista de Protocolos
+1234561
+Notificação de Ato de Concentração
+04/01/2027
+04/01/2027
+SG
+1234562
+Edital
+11/01/2027
+11/01/2027
+SG
+1234563
+Publicação de Edital no DOU
+12/01/2027
+12/01/2027
+SG
+1234564
+Despacho SG de Aprovação
+25/01/2027
+25/01/2027
+SG
+1234565
+Publicação de Despacho no DOU
+26/01/2027
+26/01/2027
+SG

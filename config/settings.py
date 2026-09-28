@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'apps.notifications.apps.NotificationsConfig',
     'apps.subscribers.apps.SubscribersConfig',
     'apps.dou.apps.DouConfig',
+    'apps.agenda.apps.AgendaConfig',
     'apps.dashboard.apps.DashboardConfig',
     'apps.telegram_bot.apps.TelegramBotConfig',
 ]
@@ -195,6 +196,13 @@ DOU_CONFIRMATION_WINDOW_END = env.dou_confirmation_window_end
 
 # Hub do dashboard (spec 010): próxima sessão de julgamento + pauta
 HUB_FETCH_MIN_INTERVAL_SECONDS = env.hub_fetch_min_interval_seconds
+
+# Agenda e prazos de AC sumário (spec 011): cadência de sincronização do calendário
+# oficial e parâmetros do auto-encerramento (ação destrutiva — ver FR-017/018).
+AGENDA_CALENDAR_SYNC_INTENSIVE_INTERVAL_SECONDS = env.agenda_calendar_sync_intensive_interval_seconds
+AGENDA_CALENDAR_SYNC_CONFIRMED_INTERVAL_SECONDS = env.agenda_calendar_sync_confirmed_interval_seconds
+AGENDA_AUTO_CLOSURE_DAYS = env.agenda_auto_closure_days
+AGENDA_LAST_CHECK_MAX_AGE_SECONDS = env.agenda_last_check_max_age_seconds
 
 # Cache compartilhado entre o processo web (Gunicorn) e o worker (containers separados) —
 # backend em banco (portável Postgres/SQLite, sem dependência nova). Tabela criada por

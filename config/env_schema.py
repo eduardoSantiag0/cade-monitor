@@ -104,6 +104,12 @@ class EnvSettings(BaseModel):
     # Hub do dashboard (spec 010): próxima sessão de julgamento + pauta
     hub_fetch_min_interval_seconds: int = 3600
 
+    # Agenda e prazos de AC sumário (spec 011)
+    agenda_calendar_sync_intensive_interval_seconds: int = 86400
+    agenda_calendar_sync_confirmed_interval_seconds: int = 30 * 86400
+    agenda_auto_closure_days: int = 10
+    agenda_last_check_max_age_seconds: int = 2 * 86400
+
     # Logging
     log_level: str = 'INFO'
 
@@ -352,6 +358,12 @@ class EnvSettings(BaseModel):
             'HUB_FETCH_MIN_INTERVAL_SECONDS',
             cls.model_fields['hub_fetch_min_interval_seconds'].default,
         )
+        for field in (
+            'agenda_calendar_sync_intensive_interval_seconds',
+            'agenda_calendar_sync_confirmed_interval_seconds',
+            'agenda_auto_closure_days', 'agenda_last_check_max_age_seconds',
+        ):
+            _set(field, field.upper(), cls.model_fields[field].default)
         _set('log_level', 'LOG_LEVEL', cls.model_fields['log_level'].default)
         _set('sentry_dsn', 'SENTRY_DSN', cls.model_fields['sentry_dsn'].default)
         _set('sentry_environment', 'SENTRY_ENVIRONMENT', cls.model_fields['sentry_environment'].default)

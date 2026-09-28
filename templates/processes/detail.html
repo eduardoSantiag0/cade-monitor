@@ -101,6 +101,48 @@
   {% endif %}
 </section>
 
+{% if agenda_timeline is not None %}
+<section>
+  <div class="section-head">
+    <h2>Prazos do Ato de Concentração Sumário</h2>
+  </div>
+  {% if agenda_timeline %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Prazo</th><th>Vencimento</th><th>Situação</th></tr>
+      </thead>
+      <tbody>
+        {% for item in agenda_timeline %}
+        <tr>
+          <td>{{ item.tipo }}</td>
+          <td>
+            {% if item.vencimento %}
+              {{ item.vencimento|date:"d/m/Y" }}
+            {% else %}
+              <span class="muted">Pendente (calendário oficial não confirmado)</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.pendente %}
+              <span class="muted">Aguardando calendário</span>
+            {% elif item.estimado %}
+              <span class="muted">Estimativa</span>
+            {% else %}
+              Confirmado
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum prazo identificado ainda nos documentos deste processo.</p>
+  {% endif %}
+</section>
+{% endif %}
+
 <section>
   <div class="section-head">
     <h2>Assinantes ({{ subscriptions.count }})</h2>

@@ -62,11 +62,15 @@ def process_detail(request, pk):
 
     recent_runs = CheckRun.objects.filter(process=process).order_by('-started_at')[:10]
     subscriptions = process.subscriptions.select_related('subscriber').all()
+
+    from apps.agenda.selectors import timeline_for_process
+
     return render(request, 'processes/detail.html', {
         'process': process,
         'page_obj': page_obj,
         'recent_runs': recent_runs,
         'subscriptions': subscriptions,
+        'agenda_timeline': timeline_for_process(process),
     })
 
 
