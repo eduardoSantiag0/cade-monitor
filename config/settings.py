@@ -192,6 +192,19 @@ DOU_FETCH_MIN_INTERVAL_SECONDS = env.dou_fetch_min_interval_seconds
 DOU_ANTICIPATION_CUTOFF = env.dou_anticipation_cutoff
 DOU_CONFIRMATION_WINDOW_START = env.dou_confirmation_window_start
 DOU_CONFIRMATION_WINDOW_END = env.dou_confirmation_window_end
+
+# Hub do dashboard (spec 010): próxima sessão de julgamento + pauta
+HUB_FETCH_MIN_INTERVAL_SECONDS = env.hub_fetch_min_interval_seconds
+
+# Cache compartilhado entre o processo web (Gunicorn) e o worker (containers separados) —
+# backend em banco (portável Postgres/SQLite, sem dependência nova). Tabela criada por
+# `python manage.py createcachetable`.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'cache_hub',
+    },
+}
 PROCESS_HASH_REDIS_ENABLED = env.process_hash_redis_enabled
 PROCESS_HASH_REDIS_URL = env.process_hash_redis_url
 PROCESS_HASH_REDIS_KEY_PREFIX = env.process_hash_redis_key_prefix

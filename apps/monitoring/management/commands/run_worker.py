@@ -140,7 +140,17 @@ class Command(BaseCommand):
                 logger.error('[worker] Erro em %s: %s', dou_step.__name__, exc, exc_info=True)
                 sentry_sdk.capture_exception(exc)
 
-        # 4. Notificações pendentes — sempre, não só em ciclos com processos vencidos
+        # 4. Hub do dashboard (spec 010): próxima sessão de julgamento + pauta, gated pela
+        #    cadência mínima entre tentativas (hub:last_attempt:*, mesmo espírito do DOU).
+        from apps.dashboard.hub import refresh_pauta, refresh_sessoes
+        for hub_step in (refresh_sessoes, refresh_pauta):
+            try:
+                hub_step(settings.REQUEST_TIMEOUT_SECONDS, settings.USER_AGENT)
+            except Exception as exc:
+                logger.error('[worker] Erro em %s: %s', hub_step.__name__, exc, exc_info=True)
+                sentry_sdk.capture_exception(exc)
+
+        # 5. Notificações pendentes — sempre, não só em ciclos com processos vencidos
         #    (mudanças achadas por /check e retentativas também precisam sair).
         try:
             stats = send_pending_notifications()

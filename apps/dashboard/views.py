@@ -12,6 +12,10 @@ from apps.subscribers.models import Subscriber
 
 @login_required
 def index(request):
+    from datetime import date
+
+    from apps.dashboard.hub import pauta_url, proxima_sessao
+
     processes = get_all_processes()
     recent_changes = (
         DetectedChange.objects
@@ -19,10 +23,15 @@ def index(request):
         .order_by('-detected_at')[:10]
     )
     stats = get_dashboard_stats()
+    sessao = proxima_sessao()
     return render(request, 'dashboard/index.html', {
         'processes': processes[:20],
         'recent_changes': recent_changes,
         'stats': stats,
+        # data convertida para exibição no template (|date: exige um objeto date,
+        # não a string ISO que hub.py usa internamente para cache/comparação).
+        'sessao': {**sessao, 'data': date.fromisoformat(sessao['data'])} if sessao else None,
+        'pauta_url': pauta_url(sessao) if sessao else '',
     })
 
 

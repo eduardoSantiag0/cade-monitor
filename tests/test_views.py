@@ -36,6 +36,32 @@ class AuthRedirectTest(TestCase):
         self.assertEqual(response.status_code, 302)
 
 
+class DashboardHubCardTest(TestCase):
+    """Cartão de próxima sessão de julgamento (spec 010) — a view nunca faz HTTP,
+    só lê o que `apps.dashboard.hub` já tem em cache."""
+
+    def setUp(self):
+        self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')
+        self.client.login(username='admin', password='password')
+
+    @patch('apps.dashboard.hub.pauta_url')
+    @patch('apps.dashboard.hub.proxima_sessao')
+    def test_card_shows_session_and_pauta_link_when_available(self, mock_sessao, mock_pauta):
+        mock_sessao.return_value = {'data': '2099-10-05', 'titulo': '999ª Sessão Ordinária'}
+        mock_pauta.return_value = 'https://cdn.cade.gov.br/x/2099/999/pauta.pdf'
+        response = self.client.get(reverse('dashboard:index'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '999ª Sessão Ordinária')
+        self.assertContains(response, 'https://cdn.cade.gov.br/x/2099/999/pauta.pdf')
+
+    @patch('apps.dashboard.hub.proxima_sessao')
+    def test_no_card_and_no_error_when_no_future_session(self, mock_sessao):
+        mock_sessao.return_value = None
+        response = self.client.get(reverse('dashboard:index'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Próxima sessão de julgamento')
+
+
 class ProcessListViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')

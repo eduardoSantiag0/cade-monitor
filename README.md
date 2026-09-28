@@ -292,6 +292,7 @@ pip install -r requirements.txt
 cp .env.example .env                # sem DATABASE_URL → usa SQLite
 
 python manage.py migrate
+python manage.py createcachetable   # tabela do cache do hub (spec 010), fora das migrations
 python manage.py createsuperuser
 python manage.py runserver          # painel em http://localhost:8000
 python manage.py run_worker         # em outro terminal
@@ -331,6 +332,7 @@ python manage.py dumpdata --natural-foreign \
 
 # 2. importar no Postgres (com DATABASE_URL = External URL)
 python manage.py migrate
+python manage.py createcachetable
 python manage.py loaddata data/migration.json
 
 # 3. reajustar as sequences
