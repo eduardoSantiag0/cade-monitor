@@ -1,5 +1,35 @@
 <!--
   SYNC IMPACT REPORT
+  Version change: 2.1.0 → 2.2.0 (MINOR)
+
+  Modified principles:
+    - II. Monitoramento Responsável — escopo ampliado para incluir, além de CADE/SEI, as fontes
+      públicas federais usadas pelo digest do DOU: www.in.gov.br / pesquisa.in.gov.br (Diário
+      Oficial da União) e sinc.cade.gov.br (Resenha/Solr público do CADE). Nova regra de cadência
+      própria para essas fontes (5 min mínimo entre tentativas à mesma fonte, janela diária
+      limitada, sem polling 24h) substituindo a regra "por processo" nesse caso — as demais
+      regras MUST/MUST NOT do princípio (GET público, sem burlar auth, sem dados pessoais além de
+      número/URL, log de auditoria) continuam valendo integralmente.
+  Modified sections: none (mudança contida no Princípio II).
+  Added sections: None
+  Removed sections: None
+  Rationale: Feature 009 (digest diário do DOU, port do `cademon/dou.py`/`scraper.py` do Mesk)
+    precisa buscar publicações do CADE no Diário Oficial da União e na Resenha do CADE — domínios
+    fora do texto literal anterior do Princípio II ("apenas páginas públicas do CADE/SEI"). Emenda
+    aprovada pelo dono do projeto antes do /speckit.plan da feature 009, seguindo a regra do fluxo
+    Spec Kit deste repositório de que mudanças arquiteturais que tocam a constituição (nova fonte
+    externa) exigem emenda explícita antes da implementação.
+  Templates requiring updates:
+    ✅ .specify/memory/constitution.md — this file
+    ✅ .specify/templates/*.md — sem mudanças estruturais necessárias (regra de conteúdo de
+      princípio, não de estrutura de spec/plan/tasks)
+    ⚠ specs/009-digest-diario-dou/ — plan.md desta feature MUST citar esta emenda no Constitution
+      Check ao consultar in.gov.br/sinc.cade.gov.br
+  Deferred TODOs: None
+-->
+
+<!--
+  SYNC IMPACT REPORT (histórico)
   Version change: 2.0.0 → 2.1.0 (MINOR)
 
   Modified principles:
@@ -124,6 +154,20 @@ CPU/memória em idle e sob carga típica (dezenas de processos monitorados).
 
 O sistema DEVE consultar apenas páginas públicas do CADE/SEI e respeitar uma cadência mínima de
 **25 minutos por processo**. O intervalo padrão configurável DEVE ser ≥ 30 minutos.
+
+Além do CADE/SEI, as seguintes fontes públicas federais estão em escopo para features que
+dependem de publicações oficiais (ex.: digest do Diário Oficial da União): `www.in.gov.br` e
+`pesquisa.in.gov.br` (Diário Oficial da União) e `sinc.cade.gov.br` (Resenha/Solr público do
+CADE). Essas fontes não são "por processo monitorado" — cada uma publica uma edição diária única,
+compartilhada entre todos os assinantes — então a cadência de 25 minutos por processo não se
+aplica a elas; em vez disso:
+
+- MUST: Cadência mínima de **5 minutos entre tentativas de busca à mesma fonte** (Resenha ou
+  in.gov.br), sem rajadas paralelas.
+- MUST: Busca limitada a uma janela diária configurável (ex.: manhã para o digest, início da noite
+  para a antecipação) — MUST NOT fazer polling contínuo 24h a essas fontes.
+
+Regras gerais do princípio, válidas para toda fonte em escopo (CADE/SEI e as listadas acima):
 
 - MUST: Usar apenas HTTP GET em endpoints públicos e sem autenticação.
 - MUST NOT: Burlar mecanismos de autenticação, capturar sessões, ou armazenar dados pessoais de
@@ -264,4 +308,4 @@ de código, READMEs parciais e decisões verbais.
 **Compliance**: Todo plano de feature DEVE incluir uma seção "Constitution Check" verificando
 alinhamento com os Princípios I–VIII antes de iniciar implementação.
 
-**Version**: 2.1.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-22
+**Version**: 2.2.0 | **Ratified**: 2026-07-07 | **Last Amended**: 2026-09-28
