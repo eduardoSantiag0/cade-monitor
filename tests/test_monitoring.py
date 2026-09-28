@@ -2,6 +2,8 @@
 Testes do app monitoring.
 Testa extractors, diff e services com mocks para chamadas HTTP.
 """
+import urllib.error
+import urllib.parse
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
@@ -454,3 +456,217 @@ class RunWorkerCycleOrderTest(TestCase):
         with self.settings(TELEGRAM_ENABLED=True):
             call_command('run_worker', '--once', stdout=MagicMock())
         mock_actions.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# specs/008-endurecer-scraper-sei: resolução de processo endurecida
+# ---------------------------------------------------------------------------
+
+PROCESS_NUMBER = '08700.005905/2026-38'
+PROCESS_NUMBER_EXTRA_ZERO = '008700.005905/2026-38'
+OTHER_PROCESS_NUMBER = '08700.001111/2026-11'
+
+SEARCH_FORM_HTML = (
+    '<html><body><form>'
+    '<input type="hidden" name="chkSinProcessos" value="P">'
+    '<input type="hidden" name="hdnFlagPesquisa" value="1">'
+    '</form></body></html>'
+)
+
+SEARCH_FORM_HTML_WITH_NEW_FIELD = (
+    '<html><body><form>'
+    '<input type="hidden" name="chkSinProcessos" value="P">'
+    '<input type="hidden" name="csrfToken" value="xyz789">'
+    '</form></body></html>'
+)
+
+NO_LINK_HTML = '<html><body>Nenhum resultado encontrado.</body></html>'
+
+
+def _result_page_html(process_number: str, href: str) -> str:
+    return (
+        '<html><body><table><tr>'
+        f'<td>{process_number}</td>'
+        f'<td><a href="{href}">Acessar</a></td>'
+        '</tr></table></body></html>'
+    )
+
+
+def _two_process_result_page_html() -> str:
+    return (
+        '<html><body><table>'
+        '<tr><td>' + OTHER_PROCESS_NUMBER + '</td>'
+        '<td><a href="md_pesq_processo_exibir.php?other">Acessar</a></td></tr>'
+        '<tr><td>' + PROCESS_NUMBER + '</td>'
+        '<td><a href="md_pesq_processo_exibir.php?mine">Acessar</a></td></tr>'
+        '</table></body></html>'
+    )
+
+
+def _html_page_response(html: str, status: int = 200, charset: str = 'utf-8'):
+    response = MagicMock()
+    response.__enter__.return_value = response
+    response.status = status
+    response.read.return_value = html.encode(charset)
+    response.headers.get_content_charset.return_value = charset
+    return response
+
+
+class ProcessResolutionTest(TestCase):
+    """specs/008-endurecer-scraper-sei: três estratégias de busca, defaults dinâmicos
+    do formulário e normalização de número de processo com zero a mais."""
+
+    # --- Foundational (T003): refactor comportamento-preservado ------------------
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_baseline_protocol_search_still_resolves(self, mock_urlopen):
+        from apps.monitoring.clients import get_snapshot, lookup_process_url
+
+        detail_href = 'md_pesq_processo_exibir.php?abc123'
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(_result_page_html(PROCESS_NUMBER, detail_href)),
+            _html_page_response('<html><body>Processo 08700.005905/2026-38</body></html>'),
+        ]
+
+        url = lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')
+        self.assertEqual(url, 'https://sei.cade.gov.br/sei/modulos/pesquisa/' + detail_href)
+
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(_result_page_html(PROCESS_NUMBER, detail_href)),
+            _html_page_response('<html><body>Processo 08700.005905/2026-38</body></html>'),
+        ]
+        snapshot = get_snapshot(PROCESS_NUMBER, timeout=5, user_agent='test')
+        self.assertEqual(snapshot.url, 'https://sei.cade.gov.br/sei/modulos/pesquisa/' + detail_href)
+
+    # --- User Story 1 (T004-T007): três estratégias de busca ---------------------
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_falls_back_to_free_text_search_when_protocol_fails(self, mock_urlopen):
+        from apps.monitoring.clients import lookup_process_url
+
+        detail_href = 'md_pesq_processo_exibir.php?viatexto'
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(_result_page_html(PROCESS_NUMBER, detail_href)),
+        ]
+
+        url = lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')
+        self.assertEqual(url, 'https://sei.cade.gov.br/sei/modulos/pesquisa/' + detail_href)
+        self.assertEqual(mock_urlopen.call_count, 3)
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_falls_back_to_document_number_search_when_others_fail(self, mock_urlopen):
+        from apps.monitoring.clients import lookup_process_url
+
+        detail_href = 'md_pesq_processo_exibir.php?viadocumento'
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(_result_page_html(PROCESS_NUMBER, detail_href)),
+        ]
+
+        url = lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')
+        self.assertEqual(url, 'https://sei.cade.gov.br/sei/modulos/pesquisa/' + detail_href)
+        self.assertEqual(mock_urlopen.call_count, 4)
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_picks_link_matching_queried_process_among_several(self, mock_urlopen):
+        from apps.monitoring.clients import lookup_process_url
+
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(_two_process_result_page_html()),
+            _html_page_response(_two_process_result_page_html()),
+        ]
+
+        url = lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')
+        self.assertEqual(url, 'https://sei.cade.gov.br/sei/modulos/pesquisa/md_pesq_processo_exibir.php?mine')
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_returns_none_and_falls_back_to_search_snapshot_when_nothing_resolves(self, mock_urlopen):
+        from apps.monitoring.clients import resolve_process_url, get_snapshot
+
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(NO_LINK_HTML),
+        ]
+        self.assertIsNone(resolve_process_url(PROCESS_NUMBER, timeout=5, user_agent='test'))
+
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(NO_LINK_HTML),
+            _html_page_response(NO_LINK_HTML),
+        ]
+        snapshot = get_snapshot(PROCESS_NUMBER, timeout=5, user_agent='test')
+        self.assertIn(f'Pesquisa CADE: {PROCESS_NUMBER}', snapshot.text)
+
+    # --- User Story 2 (T011-T012): zero a mais no número --------------------------
+
+    def test_normalize_cade_process_number_removes_extra_leading_zero(self):
+        from apps.monitoring.extractors import normalize_cade_process_number
+
+        self.assertEqual(normalize_cade_process_number(PROCESS_NUMBER_EXTRA_ZERO), PROCESS_NUMBER)
+        self.assertEqual(normalize_cade_process_number(PROCESS_NUMBER), PROCESS_NUMBER)
+        self.assertEqual(normalize_cade_process_number('numero invalido'), 'numero invalido')
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_process_number_with_extra_zero_resolves_like_correct_number(self, mock_urlopen):
+        from apps.monitoring.clients import lookup_process_url
+
+        detail_href = 'md_pesq_processo_exibir.php?abc123'
+        responses = [
+            _html_page_response(SEARCH_FORM_HTML),
+            _html_page_response(_result_page_html(PROCESS_NUMBER, detail_href)),
+        ]
+        mock_urlopen.side_effect = list(responses)
+        expected_url = lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')
+
+        mock_urlopen.side_effect = list(responses)
+        url_with_extra_zero = lookup_process_url(PROCESS_NUMBER_EXTRA_ZERO, timeout=5, user_agent='test')
+
+        self.assertEqual(url_with_extra_zero, expected_url)
+
+    # --- User Story 3 (T015-T017): defaults dinâmicos do formulário ---------------
+
+    def test_extract_input_defaults_reads_name_and_value(self):
+        from apps.monitoring.extractors import extract_input_defaults
+
+        html = (
+            '<form><input name="a" value="1"><input type="hidden" name="b" value="2">'
+            '<input name="c"></form>'
+        )
+        self.assertEqual(extract_input_defaults(html), {'a': '1', 'b': '2', 'c': ''})
+        self.assertEqual(extract_input_defaults('<html><body>sem formulario</body></html>'), {})
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_new_hidden_field_from_form_is_sent_in_search_request(self, mock_urlopen):
+        from apps.monitoring.clients import lookup_process_url
+
+        detail_href = 'md_pesq_processo_exibir.php?abc123'
+        mock_urlopen.side_effect = [
+            _html_page_response(SEARCH_FORM_HTML_WITH_NEW_FIELD),
+            _html_page_response(_result_page_html(PROCESS_NUMBER, detail_href)),
+        ]
+
+        lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')
+
+        post_request = mock_urlopen.call_args_list[1][0][0]
+        sent_payload = urllib.parse.parse_qs(post_request.data.decode('utf-8'))
+        self.assertEqual(sent_payload['csrfToken'], ['xyz789'])
+
+    @patch('apps.monitoring.clients.urllib.request.urlopen')
+    def test_initial_form_request_failure_propagates_as_fetch_error(self, mock_urlopen):
+        from apps.monitoring.clients import FetchError, lookup_process_url
+
+        mock_urlopen.side_effect = urllib.error.URLError('rede indisponivel')
+
+        with self.settings(REQUEST_RETRY_ATTEMPTS=1, REQUEST_RETRY_BACKOFF_SECONDS=0):
+            with self.assertRaises(FetchError):
+                lookup_process_url(PROCESS_NUMBER, timeout=5, user_agent='test')

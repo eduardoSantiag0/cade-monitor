@@ -3,7 +3,10 @@ Cliente HTTP para busca de snapshots de páginas públicas.
 
 Responsabilidades:
   - Fazer requisições HTTP seguras (timeout, user-agent identificável)
-  - Detectar e resolver URLs de processos CADE/SEI a partir de número de protocolo
+  - Detectar e resolver URLs de processos CADE/SEI a partir de número de protocolo, tentando em
+    sequência três estratégias de busca (protocolo, texto livre, nº de documento) com os campos
+    ocultos do formulário lidos dinamicamente da própria página (ver `_resolve_process_detail`
+    e specs/008-endurecer-scraper-sei)
   - Baixar documentos públicos como anexos
   - Não conter regra de negócio do sistema
 
@@ -28,10 +31,15 @@ from .extractors import (
     CADE_SEARCH_URL,
     DOCUMENT_LINK_MARKERS,
     DOCUMENT_NUMBER_RE,
+    SEARCH_FIELD_DOCUMENTO,
+    SEARCH_FIELD_PROTOCOLO,
+    SEARCH_FIELD_TEXTO,
     LinkTextParser,
+    extract_input_defaults,
     extract_process_detail_url,
     html_to_text,
     new_protocol_records,
+    normalize_cade_process_number,
     normalize_text,
     stable_hash,
 )
@@ -142,12 +150,8 @@ def lookup_process_url(process_number: str, timeout: int, user_agent: str) -> st
       - FetchError propagado → falha de rede/HTTP (vale tentar de novo);
       - None → a pesquisa respondeu, mas o processo não existe ou não é público.
     """
-    raw, _, charset = _open_request(
-        _build_search_request(process_number.strip(), user_agent),
-        timeout,
-    )
-    html = raw.decode(charset, errors='replace')
-    return extract_process_detail_url(html)
+    detail_url, _raw, _status, _charset = _resolve_process_detail(process_number, timeout, user_agent)
+    return detail_url
 
 
 # ---------------------------------------------------------------------------
@@ -169,9 +173,7 @@ def _fetch_url(url: str, timeout: int, user_agent: str) -> Snapshot:
 
 
 def _fetch_by_process_number(process_number: str, timeout: int, user_agent: str) -> Snapshot:
-    raw, status, charset = _open_request(_build_search_request(process_number, user_agent), timeout)
-    html = raw.decode(charset, errors='replace')
-    detail_url = extract_process_detail_url(html)
+    detail_url, raw, status, charset = _resolve_process_detail(process_number, timeout, user_agent)
     if detail_url:
         return _fetch_url(detail_url, timeout, user_agent)
     # Fallback: retorna o próprio resultado da pesquisa (processo pode não ser público)
@@ -184,21 +186,93 @@ def _fetch_by_process_number(process_number: str, timeout: int, user_agent: str)
     )
 
 
-def _build_search_request(process_number: str, user_agent: str) -> urllib.request.Request:
-    payload = {
-        'txtProtocoloPesquisa': process_number.strip(),
+def _resolve_process_detail(
+    process_number: str, timeout: int, user_agent: str
+) -> tuple[str | None, bytes, int, str]:
+    """
+    Resolve um número de processo para a URL pública de detalhe no SEI.
+
+    Normaliza o número (corrige zero a mais no início), lê os campos ocultos do
+    formulário de pesquisa (GET) e tenta em sequência três estratégias de busca —
+    protocolo, texto livre e nº de documento — parando na primeira que encontrar o
+    link de detalhe. Devolve (url_ou_None, raw, status, charset) da última tentativa
+    feita, para o chamador montar um snapshot de fallback quando nada resolver.
+    Ver specs/008-endurecer-scraper-sei para o racional de cada estratégia.
+    """
+    clean_number = normalize_cade_process_number(process_number.strip())
+
+    initial_request = urllib.request.Request(
+        CADE_SEARCH_URL,
+        headers={
+            'User-Agent': user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.5',
+        },
+    )
+    initial_raw, initial_status, initial_charset = _open_request(initial_request, timeout)
+    initial_html = initial_raw.decode(initial_charset, errors='replace')
+    defaults = extract_input_defaults(initial_html)
+
+    last_raw, last_status, last_charset = initial_raw, initial_status, initial_charset
+    for payload in _build_search_payload_attempts(clean_number, defaults):
+        raw, status, charset = _open_request(_build_search_post_request(payload, user_agent), timeout)
+        last_raw, last_status, last_charset = raw, status, charset
+        html = raw.decode(charset, errors='replace')
+        detail_url = extract_process_detail_url(html, clean_number)
+        if detail_url:
+            return detail_url, last_raw, last_status, last_charset
+
+    return None, last_raw, last_status, last_charset
+
+
+def _build_search_payload_attempts(process_number: str, defaults: dict[str, str]) -> list[dict[str, str]]:
+    """
+    Monta, em ordem, os payloads das três estratégias de busca pública do SEI: campo de
+    protocolo, campo de texto livre e campo de número de documento. Cada payload parte
+    dos defaults lidos do formulário (`defaults`), sobrescritos pelos campos que o CADE
+    Monitor efetivamente controla — assim um campo oculto novo do SEI é preservado, e um
+    campo que o app já conhece nunca fica com o valor "errado" vindo da página.
+
+    `partialfields` recebe uma consulta Solr restringindo pelo protocolo (dígitos do
+    número do processo) — sem isso, o SEI ignora o filtro de protocolo e devolve uma
+    listagem genérica de toda a base (achado ao validar esta feature ao vivo contra o
+    SEI real; ver specs/008-endurecer-scraper-sei/research.md, item 6).
+    """
+    protocol_digits = re.sub(r'\D', '', process_number) or process_number
+    protocol_partial = f'prot_pesq:*{protocol_digits}* AND sta_prot:P'
+
+    base = dict(defaults)
+    base.update({
+        SEARCH_FIELD_PROTOCOLO: process_number,
+        SEARCH_FIELD_TEXTO: '',
+        SEARCH_FIELD_DOCUMENTO: '',
         'q': '', 'chkSinProcessos': 'P',
         'chkSinDocumentosGerados': 'G', 'chkSinDocumentosRecebidos': 'R',
         'txtParticipante': '', 'hdnIdParticipante': '',
         'txtUnidade': '', 'hdnIdUnidade': '',
         'selTipoProcedimentoPesquisa': '', 'selSeriePesquisa': '',
         'txtDataInicio': '', 'txtDataFim': '',
-        'txtNumeroDocumentoPesquisa': '', 'txtAssinante': '', 'hdnIdAssinante': '',
+        'txtAssinante': '', 'hdnIdAssinante': '',
         'txtDescricaoPesquisa': '', 'txtAssunto': '', 'hdnIdAssunto': '',
-        'hdnSiglasUsuarios': '', 'partialfields': '', 'requiredfields': '',
+        'hdnSiglasUsuarios': '', 'partialfields': protocol_partial, 'requiredfields': '',
         'as_q': '', 'click': '0', 'hdnFlagPesquisa': '1',
         'sbmPesquisar': 'Pesquisar',
-    }
+    })
+
+    text_payload = dict(base)
+    text_payload.update({
+        'q': process_number,
+        'as_q': process_number,
+        SEARCH_FIELD_TEXTO: process_number,
+    })
+
+    document_payload = dict(text_payload)
+    document_payload[SEARCH_FIELD_DOCUMENTO] = process_number
+
+    return [base, text_payload, document_payload]
+
+
+def _build_search_post_request(payload: dict[str, str], user_agent: str) -> urllib.request.Request:
     data = urllib.parse.urlencode(payload).encode('utf-8')
     return urllib.request.Request(
         CADE_SEARCH_URL,
