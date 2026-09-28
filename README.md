@@ -364,8 +364,12 @@ tools/ai_metrics/  ferramenta local de métricas de desenvolvimento assistido po
 ## Testes e CI
 
 ```bash
-python manage.py test tests
+python manage.py test
 ```
+
+Sem argumento (não `python manage.py test tests`): descobre tanto a suíte histórica em `tests/`
+quanto as suítes por app mais recentes (ex. `apps/dou/tests/`, feature 009) — `test tests` sozinho
+deixa as últimas de fora silenciosamente.
 
 O GitHub Actions roda a suíte duas vezes: com SQLite e contra um PostgreSQL 18 real (job
 `test-postgres`), além de checar se falta alguma migration. As chamadas externas (SEI, Bot API,
