@@ -21,6 +21,7 @@ import sentry_sdk
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,21 @@ class Command(BaseCommand):
             if sleep > 0 and self._running:
                 time.sleep(sleep)
 
-        # 3. Notificações pendentes — sempre, não só em ciclos com processos vencidos
+        # 3. Digest DOU (spec 009): cada passo decide sozinho, pela janela diária e pela
+        #    cadência mínima entre tentativas (DouFetchState), se há algo a fazer neste tick.
+        from apps.dou.services import (
+            run_anticipation_window, run_confirmation_window, run_digest_window,
+        )
+        for dou_step in (run_digest_window, run_anticipation_window, run_confirmation_window):
+            try:
+                result = dou_step(timezone.now())
+                if not result.get('skipped') and (result.get('sent') or result.get('failed')):
+                    logger.info('[worker] %s: %s', dou_step.__name__, result)
+            except Exception as exc:
+                logger.error('[worker] Erro em %s: %s', dou_step.__name__, exc, exc_info=True)
+                sentry_sdk.capture_exception(exc)
+
+        # 4. Notificações pendentes — sempre, não só em ciclos com processos vencidos
         #    (mudanças achadas por /check e retentativas também precisam sair).
         try:
             stats = send_pending_notifications()

@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'apps.monitoring.apps.MonitoringConfig',
     'apps.notifications.apps.NotificationsConfig',
     'apps.subscribers.apps.SubscribersConfig',
+    'apps.dou.apps.DouConfig',
     'apps.dashboard.apps.DashboardConfig',
     'apps.telegram_bot.apps.TelegramBotConfig',
 ]
@@ -181,6 +182,16 @@ MAX_NOTIFICATION_ATTEMPTS = env.max_notification_attempts
 DOCUMENT_DOWNLOAD_MAX_BYTES = env.document_download_max_bytes
 EMAIL_ATTACHMENT_MAX_BYTES = env.email_attachment_max_bytes
 WHATSAPP_ATTACHMENT_MAX_BYTES = env.whatsapp_attachment_max_bytes
+
+# Digest DOU (spec 009) — janelas diárias e cadência mínima entre tentativas às fontes
+# externas (Resenha do CADE, listagem in.gov.br, publicações do SEI), conforme a emenda
+# v2.2.0 do Princípio II (mínimo 5 min entre tentativas à mesma fonte, sem polling 24h).
+DOU_DIGEST_WINDOW_START = env.dou_digest_window_start
+DOU_DIGEST_WINDOW_END = env.dou_digest_window_end
+DOU_FETCH_MIN_INTERVAL_SECONDS = env.dou_fetch_min_interval_seconds
+DOU_ANTICIPATION_CUTOFF = env.dou_anticipation_cutoff
+DOU_CONFIRMATION_WINDOW_START = env.dou_confirmation_window_start
+DOU_CONFIRMATION_WINDOW_END = env.dou_confirmation_window_end
 PROCESS_HASH_REDIS_ENABLED = env.process_hash_redis_enabled
 PROCESS_HASH_REDIS_URL = env.process_hash_redis_url
 PROCESS_HASH_REDIS_KEY_PREFIX = env.process_hash_redis_key_prefix
