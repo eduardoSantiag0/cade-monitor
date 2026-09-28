@@ -175,7 +175,7 @@ flowchart LR
 | Peça | Papel |
 |---|---|
 | **Web Service** | Recebe as mensagens do bot (`/telegram/webhook/`, validado por secret e idempotente) e responde na hora. Também serve o painel web e o Django Admin. **Nunca consulta o SEI.** |
-| **Background Worker** (`run_worker`) | A cada ciclo, na ordem: executa os pedidos do bot que dependem do SEI (primeira leitura, `/check`, `/last_update`), verifica os processos vencidos, roda o digest diário do DOU (com antecipação/confirmação da "Publicação DOU", cada um gated pela sua janela diária), sincroniza o calendário oficial e os convites/auto-encerramento de AC sumário, e envia as notificações pendentes, com retentativa. Publica o menu de comandos do bot ao iniciar. |
+| **Background Worker** (`run_worker`) | A cada ciclo, na ordem: executa os pedidos do bot que dependem do SEI (primeira leitura, `/check`, `/last_update`), verifica os processos vencidos, roda o digest diário do DOU (com antecipação/confirmação da "Publicação DOU", cada um gated pela sua janela diária), sincroniza o calendário oficial e os convites/auto-encerramento de AC sumário, avança a montagem de pacotes de autos (ZIP de documentos públicos, em fatias por ciclo), e envia as notificações pendentes, com retentativa. Publica o menu de comandos do bot ao iniciar. |
 | **PostgreSQL 18** | Banco principal (`DATABASE_URL`). Em dev e testes, o SQLite local é usado automaticamente. |
 
 | Camada | Tecnologia |

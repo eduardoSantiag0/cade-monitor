@@ -64,6 +64,7 @@ def process_detail(request, pk):
     subscriptions = process.subscriptions.select_related('subscriber').all()
 
     from apps.agenda.selectors import timeline_for_process
+    from apps.autos.selectors import active_or_recent_job
 
     return render(request, 'processes/detail.html', {
         'process': process,
@@ -71,6 +72,7 @@ def process_detail(request, pk):
         'recent_runs': recent_runs,
         'subscriptions': subscriptions,
         'agenda_timeline': timeline_for_process(process),
+        'autos_job': active_or_recent_job(process),
     })
 
 

@@ -1,5 +1,7 @@
 from django.urls import path
 
+from apps.autos import views as autos_views
+
 from . import views
 
 app_name = 'processes'
@@ -8,6 +10,8 @@ urlpatterns = [
     path('', views.process_list, name='list'),
     path('new/', views.process_create, name='create'),
     path('<int:pk>/', views.process_detail, name='detail'),
+    path('<int:pk>/autos/pedir/', autos_views.request_package_view, name='autos_request'),
+    path('<int:pk>/autos/baixar/<int:job_id>/', autos_views.download_view, name='autos_download'),
     path('<int:pk>/edit/', views.process_edit, name='edit'),
     path('<int:pk>/toggle/', views.process_toggle, name='toggle'),
     path('<int:pk>/check/', views.process_check_now, name='check_now'),
