@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — CADE Monitor{% endblock %}
 {% block content %}
+{% if sessao %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Próxima sessão de julgamento</h2>
+      <p>{{ sessao.data|date:"d/m/Y" }} — {{ sessao.titulo }}</p>
+    </div>
+    {% if pauta_url %}
+    <a href="{{ pauta_url }}" class="btn btn-light btn-sm" target="_blank" rel="noopener">Ver pauta (PDF)</a>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 <div class="stats">
   <div class="stat">
     <small>Total de processos</small>

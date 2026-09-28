@@ -101,6 +101,9 @@ class EnvSettings(BaseModel):
     dou_confirmation_window_start: str = '07:00'
     dou_confirmation_window_end: str = '11:00'
 
+    # Hub do dashboard (spec 010): próxima sessão de julgamento + pauta
+    hub_fetch_min_interval_seconds: int = 3600
+
     # Logging
     log_level: str = 'INFO'
 
@@ -344,6 +347,11 @@ class EnvSettings(BaseModel):
             'dou_anticipation_cutoff', 'dou_confirmation_window_start', 'dou_confirmation_window_end',
         ):
             _set(field, field.upper(), cls.model_fields[field].default)
+        _set(
+            'hub_fetch_min_interval_seconds',
+            'HUB_FETCH_MIN_INTERVAL_SECONDS',
+            cls.model_fields['hub_fetch_min_interval_seconds'].default,
+        )
         _set('log_level', 'LOG_LEVEL', cls.model_fields['log_level'].default)
         _set('sentry_dsn', 'SENTRY_DSN', cls.model_fields['sentry_dsn'].default)
         _set('sentry_environment', 'SENTRY_ENVIRONMENT', cls.model_fields['sentry_environment'].default)

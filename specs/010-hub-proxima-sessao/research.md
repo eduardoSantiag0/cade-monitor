@@ -68,3 +68,23 @@ chamadas reais (nunca em loop/teste automatizado):
 - `https://www.gov.br/cade/pt-br/assuntos/sessoes/sessoes%20de%20julgamento/{ano}`: confirmar que
   os links de PDF em `cdn.cade.gov.br/.../{ano}/{numero}/...` com "pauta" no nome do arquivo ainda
   existem no formato assumido.
+
+## Correção pós-implementação (validação ao vivo, 2026-09-28)
+
+Duas chamadas reais (calendário de sessões + página anual de pautas de 2026) confirmaram que,
+diferente do achado da feature 009 (DOU), **o formato assumido bateu com a realidade nas duas
+fontes, sem precisar de correção**:
+
+- `sessoes_do_html` extraiu corretamente 136 sessões do calendário real (2020–2026), incluindo a
+  sessão futura mais próxima da data de validação (`273ª Sessão Ordinária`, `2026-10-07`) e casos
+  de sessão marcada como "não realizada" (`Sessão Extraordinária (sessão não realizada)`) — que
+  ainda entram na lista (contêm "sessão" no título) mas não têm tratamento especial; como o
+  cartão só mostra data+título, isso é aceitável no v1 (não distingue sessão cancelada da
+  realizada).
+- `pauta_do_html` encontrou corretamente os PDFs de pauta das sessões já publicadas (ex.: sessões
+  269 e 271, com nomes de arquivo bem variados — `"Pauta 271.pdf"`,
+  `"SEI_1789486_Pauta_Sessao_de_Julgamento_269__SOJ.pdf"` — todos batendo com o filtro `'pauta' in
+  nome.lower()`) e devolveu `''` corretamente para a sessão 273 (a próxima), cuja pauta ainda não
+  tinha sido publicada no momento do teste — comportamento esperado de FR-006, não um bug.
+
+Nenhuma mudança em `apps/dashboard/hub.py` foi necessária após esta validação.

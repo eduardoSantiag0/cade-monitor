@@ -12,6 +12,7 @@
 #   cp .env.example .env && nano .env
 #   docker compose up -d
 #   docker compose exec web python manage.py migrate
+#   docker compose exec web python manage.py createcachetable
 #   docker compose exec web python manage.py createsuperuser
 # ---------------------------------------------------------------------------
 version: "3.9"

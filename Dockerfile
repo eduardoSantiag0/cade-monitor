@@ -40,4 +40,4 @@ EXPOSE 8000
 # Aplica as migrations e sobe o Gunicorn na porta que a plataforma define ($PORT).
 # O worker sobrescreve com: python manage.py run_worker
 # (no docker-compose, cada serviço já define o próprio `command`).
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 2 --timeout 60 --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py createcachetable && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 1 --threads 2 --timeout 60 --access-logfile - --error-logfile -"]
