@@ -53,6 +53,13 @@ DOCUMENT_LINK_MARKERS = (
     'controlador.php?acao=documento',
 )
 
+# Nomes dos campos do formulário público de pesquisa do SEI usados pelas três
+# estratégias de busca (protocolo -> texto livre -> nº de documento; ver
+# specs/008-endurecer-scraper-sei).
+SEARCH_FIELD_PROTOCOLO = 'txtProtocoloPesquisa'
+SEARCH_FIELD_TEXTO = 'txtTextoPesquisa'
+SEARCH_FIELD_DOCUMENTO = 'txtNumeroDocumentoPesquisa'
+
 PROTOCOL_HEADER_KEYS = {
     'documento / processo', 'documento', 'processo',
     'tipo de documento', 'data do documento',
@@ -140,6 +147,27 @@ class VisibleTextParser(HTMLParser):
         return normalize_text(''.join(self.parts), drop_noise=True)
 
 
+class InputDefaultsParser(HTMLParser):
+    """
+    Extrai os valores padrão (`name` -> `value`) de cada `<input>` de uma página com
+    formulário. Usado para montar a busca no SEI a partir dos campos ocultos que a
+    própria página declarar no momento da consulta, em vez de uma lista fixa no código
+    (ver specs/008-endurecer-scraper-sei).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.values: dict[str, str] = {}
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() != 'input':
+            return
+        data = {str(key).lower(): (value or '') for key, value in attrs}
+        name = data.get('name')
+        if name:
+            self.values[name] = data.get('value', '')
+
+
 class LinkTextParser(HTMLParser):
     """Extrai todos os links (<a href>) com seus textos e atributos."""
 
@@ -217,6 +245,24 @@ def html_to_text(html: str) -> tuple[str, str]:
     parser = VisibleTextParser()
     parser.feed(html)
     return parser.text, parser.title
+
+
+def extract_input_defaults(html: str) -> dict[str, str]:
+    """Lê `name` -> `value` de cada `<input>` de uma página com formulário."""
+    parser = InputDefaultsParser()
+    parser.feed(html or '')
+    return dict(parser.values)
+
+
+def normalize_cade_process_number(value: str) -> str:
+    """
+    Corrige o erro de digitação mais comum de número de processo do CADE: um zero a
+    mais no início do primeiro bloco de dígitos (ex.: 008700.003718/2015-67 ->
+    08700.003718/2015-67). Só corrige quando o restante já bate exatamente com o
+    formato oficial NNNNN.NNNNNN/NNNN-NN; caso contrário devolve a string original.
+    """
+    clean = (value or '').strip()
+    return re.sub(r'^0(?=\d{5}\.\d{6}/\d{4}-\d{2}$)', '', clean)
 
 
 def stable_hash(text: str) -> str:
@@ -408,11 +454,54 @@ def latest_cade_records(text: str | None, limit: int = 3) -> list[str]:
     return [r['text'] for r in records[:limit]]
 
 
-def extract_process_detail_url(html: str) -> str | None:
-    """Extrai a URL de detalhe do processo a partir da página de resultados da busca CADE/SEI."""
+def _digits_only(value: str) -> str:
+    return re.sub(r'\D', '', value or '')
+
+
+def _process_reference_matches(context: str, process_number: str) -> bool:
+    """True se `context` cita o número do processo, comparando só os dígitos (ignora formatação)."""
+    digits = _digits_only(process_number)
+    return bool(digits) and digits in _digits_only(context)
+
+
+def extract_process_detail_url(html: str, process_number: str | None = None) -> str | None:
+    """
+    Extrai a URL de detalhe do processo a partir da página de resultados da busca CADE/SEI.
+
+    Sem `process_number`: devolve o primeiro link de detalhe encontrado na página (comportamento
+    histórico, seguro quando a busca por protocolo praticamente garante um único resultado).
+
+    Com `process_number`: a busca por texto livre/nº de documento pode listar mais de um processo
+    na mesma página de resultado, então prioriza o link cuja linha da tabela (`<tr>...</tr>`) cite
+    esse número; só recorre ao "único link da página" quando há exatamente um candidato e a página
+    como um todo cita o processo pesquisado. Devolve `None` quando não consegue associar com
+    segurança nenhum link ao processo pesquisado (ver specs/008-endurecer-scraper-sei).
+    """
     import urllib.parse
-    match = PROCESS_DETAIL_LINK_RE.search(html)
-    if not match:
+
+    matches = list(PROCESS_DETAIL_LINK_RE.finditer(html or ''))
+    if not matches:
         return None
-    href = html_lib.unescape(match.group(1))
-    return urllib.parse.urljoin(CADE_SEARCH_URL, href)
+
+    if not process_number:
+        href = html_lib.unescape(matches[0].group(1))
+        return urllib.parse.urljoin(CADE_SEARCH_URL, href)
+
+    for row_match in re.finditer(r'<tr\b.*?</tr>', html or '', flags=re.I | re.S):
+        row_html = row_match.group(0)
+        if not _process_reference_matches(row_html, process_number):
+            continue
+        row_link = PROCESS_DETAIL_LINK_RE.search(row_html)
+        if row_link:
+            href = html_lib.unescape(row_link.group(1))
+            return urllib.parse.urljoin(CADE_SEARCH_URL, href)
+
+    urls: list[str] = []
+    for match in matches:
+        href = html_lib.unescape(match.group(1))
+        url = urllib.parse.urljoin(CADE_SEARCH_URL, href)
+        if url not in urls:
+            urls.append(url)
+    if len(urls) == 1 and _process_reference_matches(html or '', process_number):
+        return urls[0]
+    return None
