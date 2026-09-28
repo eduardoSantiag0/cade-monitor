@@ -64,6 +64,12 @@ flowchart LR
 | `004-confiabilidade-operacional` | Alertas operacionais e confiabilidade do worker |
 | `005-postgres-render` | PostgreSQL 18 como banco principal, com fallback SQLite |
 | `006-telegram-bot` | Bot do Telegram, alertas com documento, `/last_update` |
+| `007-ai-dev-metrics` | Ferramenta local de métricas de desenvolvimento assistido por IA |
+| `008-endurecer-scraper-sei` | Resolução de processo no SEI com 3 estratégias de busca e defaults dinâmicos |
+| `009-digest-diario-dou` | Digest diário do Diário Oficial da União com publicações do CADE |
+| `010-hub-proxima-sessao` | Cartão de próxima sessão de julgamento do CADE no dashboard |
+| `011-agenda-prazos-ac` | Linha do tempo de prazos de AC sumário, convites de calendário e auto-encerramento |
+| `012-autos-processo-pacote` | Pacote ZIP de documentos públicos de um processo |
 
 ---
 
@@ -256,6 +262,22 @@ nem `.env.*`.
 | `DOU_FETCH_MIN_INTERVAL_SECONDS` | `300` | Cadência mínima por fonte (Resenha/in.gov.br/SEI) — emenda v2.2.0 do Princípio II. |
 | `DOU_ANTICIPATION_CUTOFF` | `22:00` | Horário-limite do complemento da antecipação da véspera. |
 | `DOU_CONFIRMATION_WINDOW_START` / `_END` | `07:00` / `11:00` | Janela diária da confirmação da manhã. |
+
+**Agenda e prazos de AC sumário** (spec 011)
+
+| Variável | Padrão | Observação |
+|---|---|---|
+| `AGENDA_CALENDAR_SYNC_INTENSIVE_INTERVAL_SECONDS` | `86400` | Cadência de sincronização enquanto o calendário do ano não está confirmado. |
+| `AGENDA_CALENDAR_SYNC_CONFIRMED_INTERVAL_SECONDS` | `2592000` (30 dias) | Cadência depois de confirmado. |
+| `AGENDA_AUTO_CLOSURE_DAYS` | `10` | Dias sem movimentação após a certidão para o auto-encerramento (ação destrutiva — ver `constitution.md` e `specs/011-*/spec.md`). |
+| `AGENDA_LAST_CHECK_MAX_AGE_SECONDS` | `172800` (2 dias) | Guarda de segurança: só apaga se a última checagem do processo for recente. |
+
+**Pacote de autos** (spec 012)
+
+| Variável | Padrão | Observação |
+|---|---|---|
+| `AUTOS_PACKAGE_TTL_SECONDS` | `604800` (7 dias) | Validade do ZIP pronto antes de ser removido do disco. |
+| `AUTOS_MAX_DOCUMENTS_PER_TICK` | `1` | Documentos processados por ciclo do worker — evita que um pacote grande monopolize o `run_worker`. |
 
 **Canais opcionais**
 - **E-mail:** `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
