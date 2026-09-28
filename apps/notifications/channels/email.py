@@ -8,6 +8,7 @@ Em produção, usa SMTP configurado via variáveis de ambiente.
 from __future__ import annotations
 
 import logging
+from email.mime.text import MIMEText
 
 from django.conf import settings
 from django.core.mail import EmailMessage
@@ -64,7 +65,20 @@ def send_email_notification(
                 logger.warning('[email] Anexo inválido ignorado: %s', exc)
                 continue
             maintype, _, subtype = attachment.content_type.partition('/')
-            msg.attach(attachment.filename, attachment.content, f'{maintype}/{subtype}')
+            calendar_method = str(att.get('calendar_method') or '').strip().upper()
+            if calendar_method in ('REQUEST', 'CANCEL'):
+                # Convite de calendário (spec 011): o parâmetro `method` no
+                # Content-Type é o que faz Gmail/Outlook mostrarem os botões de
+                # Aceitar/Recusar — precisa de `set_param`, não dá para embutir
+                # no `content_type` de EmailAttachment (viraria subtype inválido).
+                part = MIMEText(attachment.content.decode('utf-8'), subtype, 'utf-8')
+                part.set_param('method', calendar_method)
+                part.add_header(
+                    'Content-Disposition', 'attachment', filename=attachment.filename,
+                )
+                msg.attach(part)
+            else:
+                msg.attach(attachment.filename, attachment.content, f'{maintype}/{subtype}')
 
         msg.send(fail_silently=False)
         logger.debug('[email] Mensagem enviada para %s', to_address)

@@ -150,7 +150,20 @@ class Command(BaseCommand):
                 logger.error('[worker] Erro em %s: %s', hub_step.__name__, exc, exc_info=True)
                 sentry_sdk.capture_exception(exc)
 
-        # 5. Notificações pendentes — sempre, não só em ciclos com processos vencidos
+        # 5. Agenda e prazos de AC sumário (spec 011): calendário -> convites -> auto-
+        #    encerramento, nessa ordem (auto-encerramento cancela convite antes de apagar,
+        #    FR-019, e precisa do calendário já sincronizado para calcular prazo).
+        from apps.agenda.services import run_auto_closure, refresh_timelines_and_invites, sync_calendar
+        for agenda_step in (sync_calendar, refresh_timelines_and_invites, run_auto_closure):
+            try:
+                result = agenda_step(timezone.now())
+                if result:
+                    logger.info('[worker] %s: %s', agenda_step.__name__, result)
+            except Exception as exc:
+                logger.error('[worker] Erro em %s: %s', agenda_step.__name__, exc, exc_info=True)
+                sentry_sdk.capture_exception(exc)
+
+        # 6. Notificações pendentes — sempre, não só em ciclos com processos vencidos
         #    (mudanças achadas por /check e retentativas também precisam sair).
         try:
             stats = send_pending_notifications()

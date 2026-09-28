@@ -115,6 +115,35 @@ class ProcessDetailViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class ProcessDetailAgendaTimelineTest(TestCase):
+    """Seção de prazos de AC sumário na página do processo (spec 011)."""
+
+    def setUp(self):
+        self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')
+        self.client.login(username='admin', password='password')
+        self.process = _make_process()
+
+    @patch('apps.agenda.selectors.timeline_for_process')
+    def test_shows_timeline_section_for_ac_sumario(self, mock_timeline):
+        from datetime import date
+        mock_timeline.return_value = [
+            {'tipo': 'analise_sg', 'vencimento': date(2027, 2, 3), 'estimado': False,
+             'confidence': 0.9, 'pendente': False},
+        ]
+        url = reverse('processes:detail', kwargs={'pk': self.process.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Prazos do Ato de Concentração Sumário')
+
+    @patch('apps.agenda.selectors.timeline_for_process')
+    def test_hides_timeline_section_for_non_ac_sumario(self, mock_timeline):
+        mock_timeline.return_value = None
+        url = reverse('processes:detail', kwargs={'pk': self.process.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Prazos do Ato de Concentração Sumário')
+
+
 class ProcessCreateViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser('admin', 'a@b.com', 'password')
