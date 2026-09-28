@@ -93,6 +93,14 @@ class EnvSettings(BaseModel):
     min_valid_page_text_length: int = 220
     min_valid_page_size_ratio: float = 0.35
 
+    # Digest DOU (spec 009)
+    dou_digest_window_start: str = '08:30'
+    dou_digest_window_end: str = '11:30'
+    dou_fetch_min_interval_seconds: int = 300
+    dou_anticipation_cutoff: str = '22:00'
+    dou_confirmation_window_start: str = '07:00'
+    dou_confirmation_window_end: str = '11:00'
+
     # Logging
     log_level: str = 'INFO'
 
@@ -182,6 +190,22 @@ class EnvSettings(BaseModel):
     @classmethod
     def _enforce_minimum_interval(cls, value: int) -> int:
         return max(1500, value)
+
+    @field_validator(
+        'dou_digest_window_start', 'dou_digest_window_end', 'dou_anticipation_cutoff',
+        'dou_confirmation_window_start', 'dou_confirmation_window_end', mode='after',
+    )
+    @classmethod
+    def _validate_hhmm(cls, value: str) -> str:
+        if not re.fullmatch(r'([01]\d|2[0-3]):[0-5]\d', value):
+            raise ValueError(f'Horário inválido: {value!r}. Use o formato HH:MM (24h).')
+        return value
+
+    @field_validator('dou_fetch_min_interval_seconds', mode='after')
+    @classmethod
+    def _dou_fetch_interval_minimum(cls, value: int) -> int:
+        # Cadência mínima da emenda v2.2.0 do Princípio II: nunca menos de 5 min.
+        return max(300, value)
 
     @field_validator('log_level', mode='after')
     @classmethod
@@ -315,6 +339,11 @@ class EnvSettings(BaseModel):
             'MIN_VALID_PAGE_SIZE_RATIO',
             cls.model_fields['min_valid_page_size_ratio'].default,
         )
+        for field in (
+            'dou_digest_window_start', 'dou_digest_window_end', 'dou_fetch_min_interval_seconds',
+            'dou_anticipation_cutoff', 'dou_confirmation_window_start', 'dou_confirmation_window_end',
+        ):
+            _set(field, field.upper(), cls.model_fields[field].default)
         _set('log_level', 'LOG_LEVEL', cls.model_fields['log_level'].default)
         _set('sentry_dsn', 'SENTRY_DSN', cls.model_fields['sentry_dsn'].default)
         _set('sentry_environment', 'SENTRY_ENVIRONMENT', cls.model_fields['sentry_environment'].default)

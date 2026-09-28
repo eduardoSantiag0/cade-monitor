@@ -23,9 +23,13 @@ def send_email_notification(
     subject: str,
     body: str,
     attachments: list[dict] | None = None,
+    html: bool = False,
 ) -> tuple[str, str | None]:
     """
     Envia e-mail usando django.core.mail.
+    `html=True` marca o corpo como HTML (`Content-Type: text/html`) — usado pelo
+    digest DOU (spec 009), que precisa de negrito/destaque visual; sem isso o corpo
+    sai sempre como texto puro, como antes.
     Retorna (status, error_message).
     """
     if not to_address or '@' not in to_address:
@@ -43,6 +47,8 @@ def send_email_notification(
             from_email=from_email,
             to=[to_address],
         )
+        if html:
+            msg.content_subtype = 'html'
 
         for att in (attachments or []):
             content = att.get('content')

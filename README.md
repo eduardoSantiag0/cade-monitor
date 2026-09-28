@@ -175,7 +175,7 @@ flowchart LR
 | Peça | Papel |
 |---|---|
 | **Web Service** | Recebe as mensagens do bot (`/telegram/webhook/`, validado por secret e idempotente) e responde na hora. Também serve o painel web e o Django Admin. **Nunca consulta o SEI.** |
-| **Background Worker** (`run_worker`) | A cada ciclo, na ordem: executa os pedidos do bot que dependem do SEI (primeira leitura, `/check`, `/last_update`), verifica os processos vencidos e envia as notificações pendentes, com retentativa. Publica o menu de comandos do bot ao iniciar. |
+| **Background Worker** (`run_worker`) | A cada ciclo, na ordem: executa os pedidos do bot que dependem do SEI (primeira leitura, `/check`, `/last_update`), verifica os processos vencidos, roda o digest diário do DOU (com antecipação/confirmação da "Publicação DOU", cada um gated pela sua janela diária) e envia as notificações pendentes, com retentativa. Publica o menu de comandos do bot ao iniciar. |
 | **PostgreSQL 18** | Banco principal (`DATABASE_URL`). Em dev e testes, o SQLite local é usado automaticamente. |
 
 | Camada | Tecnologia |
@@ -247,6 +247,15 @@ nem `.env.*`.
 | `CHECK_INTERVAL_SECONDS` | `1500` | Mínimo de 25 min por processo. |
 | `WORKER_TICK_SECONDS` | `5` | Tempo de resposta dos pedidos do bot. |
 | `MAX_PROCESSES_PER_CYCLE` / `SLEEP_BETWEEN_REQUESTS_SECONDS` | `20` / `2` | |
+
+**Digest DOU** (spec 009)
+
+| Variável | Padrão | Observação |
+|---|---|---|
+| `DOU_DIGEST_WINDOW_START` / `_END` | `08:30` / `11:30` | Janela diária de busca do digest. |
+| `DOU_FETCH_MIN_INTERVAL_SECONDS` | `300` | Cadência mínima por fonte (Resenha/in.gov.br/SEI) — emenda v2.2.0 do Princípio II. |
+| `DOU_ANTICIPATION_CUTOFF` | `22:00` | Horário-limite do complemento da antecipação da véspera. |
+| `DOU_CONFIRMATION_WINDOW_START` / `_END` | `07:00` / `11:00` | Janela diária da confirmação da manhã. |
 
 **Canais opcionais**
 - **E-mail:** `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,

@@ -17,11 +17,12 @@ Princípio VII da constituição) e sem envio real de e-mail (backend `console`/
 
 ```powershell
 python manage.py shell -c "
-from datetime import date
+from datetime import date, datetime
+from apps.dou.parsers import parse_resenha_html
 from apps.dou.render import render_digest_text
 from apps.dou.tests.fixtures import load_fixture
-dou_data = load_fixture('resenha_dia_com_publicacoes.json')
-print(render_digest_text(dou_data, terms=['Empresa XYZ']))
+dou_data = parse_resenha_html(load_fixture('resenha_com_publicacoes.json')['html'])
+print(render_digest_text(dou_data, terms=['Empresa XYZ'], reference_date=date.today(), now=datetime.now()))
 "
 ```
 
@@ -29,6 +30,16 @@ Conferir manualmente: título do caso e nomes de partes aparecem no texto de for
 despacho longo do fixture aparece truncado (início + "(...)" + conclusão).
 
 ## 3. Validar manualmente contra as fontes reais (opcional, econômico — só 1-2 chamadas)
+
+*Já validado em 2026-09-28 para Resenha e listagem in.gov.br — ver "Correção
+pós-implementação" em `research.md` para o que mudou em relação ao design original.
+`fetch_sei_publications` (usado pela antecipação, User Story 2) também já foi validado
+ao vivo, com um achado negativo ainda sem solução: o formulário de busca de publicações
+do SEI parece depender de uma busca assíncrona (AJAX) em vez de aceitar POST direto como
+o de busca de processo (feature 008) — hoje a busca real sempre volta vazia (com
+segurança: `parse_sei_publications` nunca inventa um item a partir da casca da página).
+Encontrar o endpoint AJAX correto fica como acompanhamento pendente antes de considerar
+as Histórias 2/3 prontas para produção — ver research.md para o detalhe completo.*
 
 ```powershell
 python manage.py shell -c "

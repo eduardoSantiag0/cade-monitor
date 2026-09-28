@@ -73,5 +73,103 @@ validar com 1-2 chamadas reais (nunca em loop/teste automatizado):
   site e que o `User-Agent`/retries do padrão de `apps/monitoring/clients.py` bastam (sem precisar
   do backoff mais agressivo que o Mesk usa).
 
-*(Seção "Correção pós-implementação" a ser adicionada aqui, se a realidade divergir do que este
-research.md assume, seguindo o modelo de `specs/008-endurecer-scraper-sei/research.md`, item 6.)*
+## Correção pós-implementação (validação ao vivo, 2026-09-28)
+
+Duas chamadas reais (uma à Resenha, uma à listagem in.gov.br, seção `dou1`) revelaram que o
+formato assumido no design original estava errado nos dois casos — nenhum dos dois usa a
+estrutura "Editais/Despachos/Atas" com cabeçalhos em negrito nem classes CSS previsíveis que o
+plano original presumia. `apps/dou/parsers.py` foi reescrito para refletir a realidade abaixo.
+
+### Resenha do CADE (`sinc.cade.gov.br`)
+
+- O endpoint e os parâmetros (`q=colecao:resenha_dou AND data_ordem:AAAAMMDD&fl=conteudo&rows=1
+  &wt=json`) estavam corretos — resposta 200, um único documento com o campo `conteudo` trazendo
+  o HTML da resenha inteira do dia.
+- **Divergência**: não existe nenhum cabeçalho em negrito "Editais"/"Despachos"/"Atas". A estrutura
+  real é: `<div><strong>Seção N</strong></div>` → `<div><strong>NOME DO ÓRGÃO</strong></div>` →
+  uma sequência de itens, cada um com um `<div><strong>TÍTULO DO ATO</strong></div>` (ex.:
+  "DESPACHO Nº 44, DE 23 DE SETEMBRO DE 2026", ou um lote como "DESPACHOS DO
+  SUPERINTENDENTE-GERAL" com subitens "Nº 1.263/2026") seguido de `<div>`s de corpo em texto
+  normal, até o próximo título ou até a próxima seção/órgão. Um mesmo dia mistura vários órgãos na
+  mesma edição (ex.: Seção 2 trouxe uma portaria de pessoal do Ministério da Gestão que só cita o
+  CADE de passagem, como local de exercício de uma servidora — não é publicação do CADE e não pode
+  entrar no digest).
+- **Correção aplicada**: `parse_resenha_html` agora percorre os blocos em ordem, rastreia a
+  seção/órgão corrente e só acumula texto enquanto o órgão for reconhecido como CADE (reaproveita
+  `is_cade_item`, o mesmo fold usado no filtro do in.gov.br). Seção 1 vira o bucket `despachos`;
+  Seção 3 vira `editais` (mapeamento best-effort — Seção 3 do DOU é onde entram os
+  editais/avisos/extratos do CADE). Dentro do texto já filtrado por CADE, a divisão em itens
+  continua pelo `_CASE_TITLE_RE` (Ato de Concentração/Processo Administrativo/etc.), que já
+  funcionava corretamente para esse propósito.
+- **Atas/pautas**: no dia validado não saiu nenhuma ata/pauta de sessão na Resenha, então não há
+  exemplo real para calibrar a extração. Em vez de uma heurística especulativa, `parse_resenha_html`
+  devolve `atas: []` por ora — `render.py` já sabe exibir o rodapé assim que `atas` vier populada
+  por qualquer fonte futura (é só uma lista de `{'titulo', 'url'}`). Fica como acompanhamento: a
+  próxima vez que uma ata sair na Resenha, capturar o HTML real e implementar a extração
+  correspondente.
+
+### Listagem in.gov.br (`www.in.gov.br/leiturajornal`)
+
+- **Divergência maior**: a página é majoritariamente renderizada em JavaScript (Liferay); não há
+  `class="materia-item"`/`class="orgao"` nem qualquer marcação HTML estática previsível para os
+  itens do dia (a suposição original, sem validação, estava errada). Os itens do dia vêm embutidos
+  como JSON dentro de `<script id="params" type="application/json">{"jsonArray": [...], ...}
+  </script>`, um item por publicação, com os campos: `title`, `content` (resumo, ~400 caracteres —
+  **não** é o texto integral do ato), `artType` (ex. `"Despacho"`, presumivelmente `"Edital"` para
+  editais — não confirmado ao vivo por falta de um edital no dia testado), `hierarchyStr` (caminho
+  completo do órgão, ex. `"Ministério da Justiça e Segurança Pública/Conselho Administrativo de
+  Defesa Econômica/Superintendência-Geral"`) e `urlTitle` (slug para montar a URL do artigo:
+  `https://www.in.gov.br/web/dou/-/<urlTitle>`).
+- **Correção aplicada**: `parse_ingov_listing` extrai e faz `json.loads` do conteúdo desse script,
+  filtra por `hierarchyStr` (mesmo `is_cade_item` de antes) e classifica edital vs. despacho pelo
+  campo `artType` (`fold(artType) == 'edital'` → editais; qualquer outro valor → despachos), em vez
+  de inferir pelo título.
+- **Limitação conhecida (já prevista como fora de escopo)**: como `content` é só um resumo curto,
+  o digest via fallback in.gov.br sai com texto mais curto que via Resenha (que traz o ato
+  completo). Abrir cada artigo pela URL de `urlTitle` para pegar o texto integral já estava listado
+  como "nice-to-have, defer" no brief de design original — confirmado como o comportamento real a
+  melhorar numa iteração futura, não um bloqueio para o v1.
+
+### Publicações do SEI (`sei.cade.gov.br`, usado pela antecipação — User Story 2)
+
+**Validado ao vivo em 2026-09-28 (2 chamadas: 1ª rodada GET+POST, 2ª rodada GET+POST) — achado
+negativo, ainda sem solução.** A implementação original desta rodada usava parâmetros de query
+GET inventados (`rdo_data_publicacao`, `dta_inicio`, `dta_fim`), que a primeira chamada real
+mostrou estarem completamente errados: `SEI_PUBLICATIONS_URL` é o formulário de busca
+`frmPublicacaoPesquisa` (`method="post"`, mesma URL como `action`), com campos
+`rdoDataPublicacao` (radio `H`/`I`/`E`, `E` = período explícito, pré-marcado), `txtDataInicio`/
+`txtDataFim` (texto, formato `DD/MM/AAAA`) e `selOrgao[]` (só uma opção: `value="0"` = CADE).
+
+**Correção aplicada**: `fetch_sei_publications` agora segue o mesmo padrão de
+`apps/monitoring/extractors.py::_resolve_process_detail` (GET inicial para ler os defaults do
+formulário via `extract_input_defaults`, reaproveitado por import — não duplicado —, depois POST
+com esses defaults sobrescritos pelos campos de busca).
+
+**Mas a segunda chamada real (já com essa correção) mostrou que isso ainda não basta**: o POST
+devolve a mesma casca da página de busca (o mesmo HTML do formulário, incluindo o CSS de um
+`#tblPublicacoes` que nunca chega a existir no corpo da resposta) — não uma tabela de resultados.
+Diferente do formulário de busca de processo (`CADE_SEARCH_URL`, feature 008), que aceita POST
+direto, o de publicações parece depender do `onsubmit="return onSubmitForm();"` do formulário —
+provável busca assíncrona (AJAX, contra um endpoint ainda não identificado, ex.
+`InfraAjax.js`/`controlador_ajax.php`) em vez de um POST síncrono com reload de página. Não há,
+nos campos estáticos do formulário, nenhuma pista do endpoint/parâmetros AJAX reais — identificar
+isso exigiria inspecionar o tráfego de rede de uma sessão de navegador real (fora do orçamento de
+"1-2 chamadas" desta validação, e potencialmente exigindo uma dependência de navegador headless
+que contraria o Princípio I/VIII).
+
+**Decisão de segurança tomada agora**: em vez de arriscar mandar lixo (o texto da casca da
+página — menu, script, CSS — não tem nenhuma citação de caso) como se fosse uma publicação real,
+`parse_sei_publications` foi ajustado para **não** cair no fallback de "nenhuma citação
+reconhecida → devolve o texto inteiro como um item" que `_split_items_by_case_title` usa para a
+Resenha (lá é seguro, porque o texto já filtrado por CADE é sempre conteúdo real). Sem nenhuma
+citação de caso reconhecida, `parse_sei_publications` devolve `[]` — que já vira corretamente o
+aviso de "sem publicações previstas" (FR-011), nunca um e-mail com conteúdo inventado.
+
+**Estado resultante**: User Story 2 (antecipação) e User Story 3 (confirmação, que depende de
+uma antecipação existir) estão implementadas, testadas (com fixtures que simulam o formato de
+item esperado) e **seguras** (nunca mandam lixo), mas **não comprovadamente funcionais contra o
+SEI real** — hoje, na prática, `run_anticipation_window` sempre vai mandar o e-mail de "sem
+publicações previstas", nunca um digest real, até que o endpoint AJAX correto seja identificado.
+Acompanhamento pendente e explícito antes de considerar User Story 2/3 prontas para produção —
+não é um bloqueio para mergear User Story 1 (digest diário, que não depende disso), mas é um
+gap real de funcionalidade que não deve ficar silencioso.
