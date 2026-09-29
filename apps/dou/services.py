@@ -41,8 +41,13 @@ def _mark_fetch_success(source: str, now: datetime) -> None:
 
 
 def _within_window(now: datetime, start: str, end: str) -> bool:
+    """`start`/`end` são horários `HH:MM` (sem segundos) — a comparação trunca o
+    segundo/microssegundo atual antes de comparar, para o minuto de `end` inteiro
+    contar como dentro da janela (sem isso, `23:59:01`-`23:59:59` cairiam fora de
+    uma janela configurada para terminar às `23:59`)."""
     local = timezone.localtime(now) if timezone.is_aware(now) else now
-    return _parse_hhmm(start) <= local.time() <= _parse_hhmm(end)
+    current_minute = local.time().replace(second=0, microsecond=0)
+    return _parse_hhmm(start) <= current_minute <= _parse_hhmm(end)
 
 
 def _local_date(now: datetime):

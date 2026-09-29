@@ -1,3 +1,4 @@
+from datetime import datetime
 from datetime import time as dt_time
 from datetime import timedelta
 from unittest.mock import patch
@@ -65,7 +66,10 @@ class RunDigestWindowTest(TestCase):
     def test_second_call_same_day_does_not_resend(self, mock_fetch_resenha, mock_send):
         mock_fetch_resenha.return_value = {'source': 'resenha', 'html': self.resenha_html}
         mock_send.return_value = ('sent', None)
-        now = timezone.now()
+        # Horário fixo (meio-dia), não `timezone.now()`: perto da meia-noite local,
+        # "10 minutos depois" cruzaria para o dia seguinte e o teste ficaria
+        # instável (reference_date mudaria entre as duas chamadas).
+        now = timezone.make_aware(datetime(2026, 6, 15, 12, 0))
         run_digest_window(now)
         run_digest_window(now + timedelta(minutes=10))
         self.assertEqual(mock_send.call_count, 1)
