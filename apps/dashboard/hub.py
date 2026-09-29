@@ -1,9 +1,8 @@
 """
 Cartão de "próxima sessão de julgamento" do dashboard (spec 010).
 
-Adaptado de `cademon/hub.py` (projeto Mesk), com escopo reduzido: só a sessão e o
-link da pauta — ver specs/010-hub-proxima-sessao/spec.md, Assumptions, para o que
-ficou de fora e por quê.
+Escopo reduzido: só a sessão e o link da pauta — ver
+specs/010-hub-proxima-sessao/spec.md, Assumptions, para o que ficou de fora e por quê.
 
 Duas funções de leitura (`proxima_sessao`, `pauta_url`) só leem o cache — nunca
 fazem HTTP, chamadas pela view. Duas de escrita (`refresh_sessoes`, `refresh_pauta`)
@@ -104,7 +103,7 @@ def sessoes_do_html(html: str) -> list[tuple[str, str]]:
     O HTML do gov.br quebra o texto em pedaços ("05", "-", "269", "ª", "Sessão
     Ordinária"), então o parser anda linha a linha do texto sem tags, carregando
     o ano e o mês correntes, e junta as linhas soltas de cada dia até o próximo
-    marcador. Adaptado de `cademon/hub.py::sessoes_do_html`."""
+    marcador."""
     texto = re.sub(r'<[^>]+>', '\n', html)
     linhas = [linha.strip() for linha in texto.splitlines() if linha.strip()]
     sessoes: list[tuple[str, str]] = []
@@ -185,7 +184,7 @@ def proxima_sessao() -> dict | None:
 
 def pauta_do_html(html: str, ano: int, numero: int) -> str:
     """URL do PDF da pauta na página anual: o CDN organiza por /{ano}/{nº}/ e o
-    nome do arquivo traz "pauta". Adaptado de `cademon/hub.py::pauta_do_html`."""
+    nome do arquivo traz "pauta"."""
     padrao = re.compile(
         rf'href="(https://cdn\.cade\.gov\.br/[^"]*/{ano}/{numero}/[^"]*)"', re.I,
     )

@@ -26,8 +26,8 @@ stdlib (sem `icalendar` nem lib de terceiro — Princípio VIII).
 
 **Storage**: 3 modelos novos em `apps/agenda/models.py` (`CadeCalendarYear`,
 `CadeCalendarEntry`, `ProcessInvite`) — ver data-model.md. A linha do tempo de prazos em si NUNCA
-é persistida (recalculada a cada leitura, a partir dos documentos + calendário atuais, mesmo
-padrão do Mesk) — só o que já foi *enviado* como convite precisa de estado (`ProcessInvite`), para
+é persistida (recalculada a cada leitura, a partir dos documentos + calendário atuais) — só o que
+já foi *enviado* como convite precisa de estado (`ProcessInvite`), para
 decidir reenviar/atualizar/cancelar.
 
 **Testing**: `django.test.TestCase`, fixtures de texto simulando `MonitoredProcess.last_text`
@@ -67,7 +67,7 @@ ordem de grandeza dos processos já monitorados hoje (dezenas), não com o volum
 | V. Notificações | **PASS** — convite de calendário é um anexo `.ics` no e-mail já existente (`apps/notifications/channels/email.py`), reaproveitando o mesmo `html=`/anexo já suportado; nenhum canal novo. |
 | VI. Humanização das Mensagens | **PASS** — corpo do e-mail do convite em português natural; linha do tempo exibida na página do processo já existente, com rótulos humanos (não JSON cru). |
 | VII. Portfólio-Ready | **PASS** — testes cobrindo cada fórmula de prazo (FR-004/007-010), cada guarda de segurança do auto-encerramento isoladamente (FR-017/018), e o parser do ato oficial com fixture local. |
-| VIII. Sem Over-Engineering | **PASS** — geração de `.ics` por template de texto (mesma técnica do Mesk, sem lib nova); linha do tempo nunca persistida (evita um histórico que ninguém pediu); auto-encerramento reaproveita campos já existentes de `MonitoredProcess` (`last_checked_at`, `last_error`) em vez de duplicar estado. |
+| VIII. Sem Over-Engineering | **PASS** — geração de `.ics` por template de texto (stdlib pura, sem lib nova); linha do tempo nunca persistida (evita um histórico que ninguém pediu); auto-encerramento reaproveita campos já existentes de `MonitoredProcess` (`last_checked_at`, `last_error`) em vez de duplicar estado. |
 
 ## Project Structure
 

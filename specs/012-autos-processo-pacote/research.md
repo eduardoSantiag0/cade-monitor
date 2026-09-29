@@ -8,7 +8,7 @@
   normalizado, sem HTML, guardado do último ciclo de monitoramento). A lista declarada de
   documentos vem de `extract_protocol_records(snapshot.text)`; as URLs de download vêm de
   `extract_document_links(snapshot.html, snapshot.url)`.
-- **Rationale**: mesma lição documentada no `autos_pacote.py` do Mesk — um pacote montado sobre um
+- **Rationale**: um pacote montado sobre um
   snapshot desatualizado pode divergir silenciosamente do processo real (documento novo desde o
   último ciclo de monitoramento, prazo de 30 min por processo). Como o pedido de pacote é sob
   demanda (não em todo ciclo do worker), o custo de um fetch fresco por pedido é aceitável.
@@ -32,7 +32,7 @@
   a ausência (ex.: termos como "restrito", "sigiloso", "indisponível", "removido" próximos à
   referência do documento). Sem essa corroboração, o documento conta como divergência para a
   checagem de integridade (FR-008/FR-009) — nunca vira um placeholder por suposição.
-- **Rationale**: replica a mesma cautela do Mesk (`autos_pacote.py`, doc comment): um documento sem
+- **Rationale**: um documento sem
   link E sem explicação é sinal de bug de extração (ou de um tipo de ausência não previsto), não
   de "documento restrito" — tratar os dois casos como a mesma coisa esconderia bugs atrás de um
   pacote aparentemente completo.
@@ -79,8 +79,8 @@
 
 - **Decisão**: incluído como está no pacote final (um `.zip` dentro do `.zip`), sem abrir/expandir
   seu conteúdo nesta versão (spec.md, Assumptions/FR-013).
-- **Rationale**: expandir recursivamente introduz risco de zip-bomb/path-traversal que o Mesk trata
-  com uma profundidade máxima e defesas específicas — complexidade desproporcional para o v1, sem
+- **Rationale**: expandir recursivamente introduz risco de zip-bomb/path-traversal, que exigiria
+  uma profundidade máxima e defesas específicas — complexidade desproporcional para o v1, sem
   requisito que exija abrir o conteúdo.
 
 ## Validação ao vivo (a fazer durante a implementação, documentar aqui o resultado)

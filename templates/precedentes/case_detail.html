@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ case.titulo }} — Precedentes — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>{{ case.titulo }}</h2>
+      <p class="muted">{{ case.cliente|default:"Sem cliente informado" }} — criado em {{ case.created_at|date:"d/m/Y" }}</p>
+    </div>
+  </div>
+  {% if case.notas %}
+  <div style="margin-top:8px;padding:10px;background:#f8fafc;border-radius:6px;border:1px solid var(--line)">
+    <label>Notas</label>
+    <div style="font-size:13px;white-space:pre-wrap">{{ case.notas }}</div>
+  </div>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Empresas ({{ entities|length }})</h2>
+  </div>
+
+  <details>
+    <summary class="btn btn-light btn-sm" style="cursor:pointer">+ Adicionar empresa</summary>
+    <form method="post" action="{% url 'precedentes:entity_add' case.pk %}" style="margin-top:12px;max-width:520px">
+      {% csrf_token %}
+      <label for="id_papel">Papel</label>
+      {{ entity_form.papel }}
+      <label for="id_razao_social" style="margin-top:8px">Razão social</label>
+      {{ entity_form.razao_social }}
+      <label for="id_cnpj" style="margin-top:8px">CNPJ</label>
+      {{ entity_form.cnpj }}
+      <label for="id_pais" style="margin-top:8px">País</label>
+      {{ entity_form.pais }}
+      <button type="submit" class="btn btn-sm" style="margin-top:10px">Adicionar</button>
+    </form>
+  </details>
+
+  {% if not entities %}
+  <p class="muted" style="margin-top:12px">Nenhuma empresa cadastrada ainda.</p>
+  {% endif %}
+
+  {% for item in entities %}
+  <div style="margin-top:16px;padding:12px;border:1px solid var(--line);border-radius:6px">
+    <div class="section-head">
+      <div>
+        <strong>{{ item.entity.razao_social }}</strong>
+        <span class="badge badge-active" style="margin-left:6px">{{ item.entity.get_papel_display }}</span>
+        {% if item.entity.cnpj %}<span class="muted" style="font-size:12px">{{ item.entity.cnpj }}</span>{% endif %}
+      </div>
+      <div class="actions">
+        <details style="display:inline-block">
+          <summary class="btn btn-light btn-sm" style="cursor:pointer;display:inline">Editar</summary>
+          <form method="post" action="{% url 'precedentes:entity_update' item.entity.pk %}" style="margin-top:8px">
+            {% csrf_token %}
+            {{ item.edit_form.papel }}
+            {{ item.edit_form.razao_social }}
+            {{ item.edit_form.cnpj }}
+            {{ item.edit_form.pais }}
+            <button type="submit" class="btn btn-sm" style="margin-top:6px">Salvar</button>
+          </form>
+        </details>
+        <form method="post" action="{% url 'precedentes:entity_remove' item.entity.pk %}"
+              onsubmit="return confirm('Remover {{ item.entity.razao_social }} e todos os seus fatos/análises dependentes?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-light btn-sm">Remover</button>
+        </form>
+      </div>
+    </div>
+
+    <div style="margin-top:10px">
+      <label>Fatos</label>
+      {% if item.facts %}
+        {% for fact in item.facts %}
+        <div class="fact-card">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <div><strong>{{ fact.campo }}</strong>: {{ fact.valor }}</div>
+            <span class="badge badge-{{ fact.status }}">{{ fact.get_status_display }}</span>
+          </div>
+          {% if fact.fonte_descricao or fact.fonte_url %}
+          <div class="muted" style="font-size:12px;margin-top:4px">
+            Fonte: {{ fact.fonte_descricao }} {% if fact.fonte_url %}<a href="{{ fact.fonte_url }}" target="_blank" rel="noopener">↗</a>{% endif %}
+          </div>
+          {% endif %}
+          {% if fact.citacao %}
+          <div class="muted" style="font-size:12px;margin-top:2px">“{{ fact.citacao }}”</div>
+          {% endif %}
+          <div class="actions" style="margin-top:6px">
+            <a href="{% url 'precedentes:fact_history' fact.pk %}" class="btn btn-light btn-sm">Histórico</a>
+            <details style="display:inline-block">
+              <summary class="btn btn-light btn-sm" style="cursor:pointer;display:inline">Corrigir</summary>
+              <form method="post" action="{% url 'precedentes:fact_correct' fact.pk %}" style="margin-top:8px;max-width:420px">
+                {% csrf_token %}
+                <label>Campo</label>
+                <input type="text" name="campo" value="{{ fact.campo }}">
+                <label style="margin-top:6px">Valor</label>
+                <textarea name="valor" rows="2">{{ fact.valor }}</textarea>
+                <label style="margin-top:6px">Status</label>
+                <select name="status">
+                  {% for value, label in fact.Status.choices %}
+                  <option value="{{ value }}" {% if value == fact.status %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <label style="margin-top:6px">Fonte</label>
+                <input type="text" name="fonte_descricao" value="{{ fact.fonte_descricao }}">
+                <label style="margin-top:6px">URL da fonte</label>
+                <input type="url" name="fonte_url" value="{{ fact.fonte_url }}">
+                <label style="margin-top:6px">Citação</label>
+                <textarea name="citacao" rows="2">{{ fact.citacao }}</textarea>
+                <label style="margin-top:6px">Motivo da correção (obrigatório)</label>
+                <textarea name="motivo" rows="2" required></textarea>
+                <button type="submit" class="btn btn-sm" style="margin-top:6px">Salvar correção</button>
+              </form>
+            </details>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted" style="font-size:13px">Nenhum fato registrado ainda.</p>
+      {% endif %}
+
+      <details style="margin-top:6px">
+        <summary class="btn btn-light btn-sm" style="cursor:pointer">+ Registrar fato</summary>
+        <form method="post" action="{% url 'precedentes:fact_add' item.entity.pk %}" style="margin-top:8px;max-width:420px">
+          {% csrf_token %}
+          <label>Campo</label>
+          {{ fact_form.campo }}
+          <label style="margin-top:6px">Valor</label>
+          {{ fact_form.valor }}
+          <label style="margin-top:6px">Status</label>
+          {{ fact_form.status }}
+          <label style="margin-top:6px">Fonte</label>
+          {{ fact_form.fonte_descricao }}
+          <label style="margin-top:6px">URL da fonte</label>
+          {{ fact_form.fonte_url }}
+          <label style="margin-top:6px">Citação</label>
+          {{ fact_form.citacao }}
+          <button type="submit" class="btn btn-sm" style="margin-top:6px">Registrar</button>
+        </form>
+      </details>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <div class="section-head">
+    <h2>Análises ({{ analyses|length }})</h2>
+  </div>
+  <p class="muted" style="font-size:13px">
+    Notas interpretativas do advogado — sempre distintas de um fato, sempre citando os fatos em que se baseiam.
+  </p>
+
+  {% for analysis in analyses %}
+  <div class="analysis-card">
+    <div>{{ analysis.texto }}</div>
+    <div class="muted" style="font-size:12px;margin-top:6px">
+      Baseada em: {% for fact in analysis.facts.all %}{{ fact.campo }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </div>
+  </div>
+  {% empty %}
+  <p class="muted">Nenhuma análise registrada ainda.</p>
+  {% endfor %}
+
+  {% if entities %}
+  <details style="margin-top:8px">
+    <summary class="btn btn-light btn-sm" style="cursor:pointer">+ Registrar análise</summary>
+    <form method="post" action="{% url 'precedentes:analysis_add' case.pk %}" style="margin-top:8px;max-width:520px">
+      {% csrf_token %}
+      <label>Texto</label>
+      {{ analysis_form.texto }}
+      <label style="margin-top:6px">Fatos-base</label>
+      {{ analysis_form.fact_ids }}
+      <button type="submit" class="btn btn-sm" style="margin-top:6px">Registrar análise</button>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

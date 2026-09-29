@@ -334,6 +334,43 @@ tr:hover td {
     background: #f1f5f9;
     color: #64748b;
 }
+.badge-confirmado {
+    background: #dcfae6;
+    color: var(--success);
+}
+.badge-confirmar_cliente,
+.badge-solicitar_cliente {
+    background: #fef3c7;
+    color: #92400e;
+}
+.badge-nao_localizado {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+/* Precedentes: fato x análise (nunca confundir um com o outro — FR-011) */
+.fact-card {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.analysis-card {
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.analysis-card::before {
+    content: "Análise";
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #1e3a5f;
+    margin-bottom: 4px;
+}
 
 /* Flash messages */
 .flash {

@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Fallback via navegador automatizado (Playwright, usado no Mesk) foi deliberadamente deixado fora do escopo desta feature — ver seção Assumptions do spec.md. Se o usuário quiser esse recurso, deve entrar como feature separada.
+- Fallback via navegador automatizado (Playwright) foi deliberadamente deixado fora do escopo desta feature — ver seção Assumptions do spec.md. Se o usuário quiser esse recurso, deve entrar como feature separada.
 - Todos os itens passaram na primeira validação; nenhuma iteração adicional foi necessária.

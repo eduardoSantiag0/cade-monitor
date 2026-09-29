@@ -37,26 +37,23 @@
   descartada para não desvalorizar o processo de emenda (reservá-lo para mudanças de escopo reais,
   como o de fato ocorreu na feature 009).
 
-## Escopo excluído do `hub.py` original (Mesk)
+## Escopo do cartão do hub
 
-- **Decisão**: portar só "próxima sessão" + "pauta"; excluir "transmissão ao vivo no YouTube" e
-  "cidade do visitante" (geo-IP).
-- **Rationale**: o `hub.py` do Mesk foi escrito para a capa pública de um site voltado a
-  visitantes externos (a cidade do visitante é literalmente um dateline de página pública, e o
-  card de "ao vivo agora" é conteúdo de vitrine). O dashboard do cade-monitor é autenticado, para
-  a própria equipe que já monitora os processos — geo-IP de quem acessa não tem propósito ali, e
-  "ao vivo agora" tem valor bem menor para quem já acompanha os processos pelo sistema. Excluir
-  os dois também evita precisar avaliar `youtube.com` (domínio de terceiro, fora do escopo atual
-  do Princípio II) e uma chamada a um serviço de geolocalização de IP de terceiro
-  (`ip-api.com`) para cada visitante — nenhum dos dois se paga pelo valor que teriam aqui.
-- **Alternativas descartadas**: portar tudo por fidelidade ao Mesk — descartada porque o
-  princípio orientador desta iniciativa (README do brief da sessão) é portar o *comportamento*
-  melhorando onde fizer sentido, não replicar código por replicar; aqui replicar sem pensar no
-  público-alvo real (equipe interna, não visitante público) seria a definição de over-engineering
-  especulativo.
-- Os helpers de formatação de data/prazo (`data_por_extenso`, `dias_ate`, `prazo_selo`) do
-  `hub.py` original ficam de fora por pertencerem, em espírito, à feature de Agenda/Prazos
-  (`calendario.py`), ainda não portada — evita duplicar essa lógica antes dela existir.
+- **Decisão**: incluir só "próxima sessão" + "pauta"; deixar fora "transmissão ao vivo no
+  YouTube" e "cidade do visitante" (geo-IP).
+- **Rationale**: o dashboard do cade-monitor é autenticado, para a própria equipe que já
+  monitora os processos — geo-IP de quem acessa não tem propósito ali, e "ao vivo agora" é
+  conteúdo típico de vitrine pública, com valor bem menor para quem já acompanha os processos
+  pelo sistema. Excluir os dois também evita precisar avaliar `youtube.com` (domínio de
+  terceiro, fora do escopo atual do Princípio II) e uma chamada a um serviço de geolocalização
+  de IP de terceiro (`ip-api.com`) para cada visitante — nenhum dos dois se paga pelo valor que
+  teriam aqui.
+- **Alternativas descartadas**: incluir essas duas funcionalidades também, por completude —
+  descartada porque o público-alvo real deste dashboard é a equipe interna, não um visitante
+  público; adicioná-las sem um caso de uso correspondente seria over-engineering especulativo.
+- Os helpers de formatação de data/prazo (`data_por_extenso`, `dias_ate`, `prazo_selo`) ficam de
+  fora por pertencerem, em espírito, à feature de Agenda/Prazos (`calendario.py`), ainda não
+  implementada — evita duplicar essa lógica antes dela existir.
 
 ## Validação ao vivo (a fazer durante a implementação, documentar aqui o resultado)
 
@@ -64,7 +61,7 @@ Seguindo o padrão das features 008/009: antes de considerar a feature pronta, v
 chamadas reais (nunca em loop/teste automatizado):
 
 - `https://www.gov.br/cade/pt-br/assuntos/sessoes/calendario-de-sessoes`: confirmar que o HTML
-  ainda seque o padrão ano→mês→dia que `sessoes_do_html` (adaptado do Mesk) assume.
+  ainda segue o padrão ano→mês→dia que `sessoes_do_html` assume.
 - `https://www.gov.br/cade/pt-br/assuntos/sessoes/sessoes%20de%20julgamento/{ano}`: confirmar que
   os links de PDF em `cdn.cade.gov.br/.../{ano}/{numero}/...` com "pauta" no nome do arquivo ainda
   existem no formato assumido.

@@ -3,7 +3,9 @@
 **Acompanhe processos públicos do CADE pelo Telegram.** Mande o número do processo para o bot
 e receba um aviso, com o documento anexado, sempre que surgir uma movimentação nova no SEI.
 
-``Notas sobre  o acesso ao bot`` O nome de usuário do bot não é divulgado publicamente neste repositório para evitar exposição e uso não intencional da instância em produção. Caso queira testar ou conhecer o bot, entre em contato com o autor do projeto.   
+**Nota sobre o acesso ao bot:** o nome de usuário do bot não é divulgado publicamente neste
+repositório, para evitar exposição e uso não intencional da instância em produção. Caso queira
+testar ou conhecer o bot, entre em contato com o autor do projeto.
 
 ```
 /watch 08700.005905/2026-38
@@ -70,6 +72,7 @@ flowchart LR
 | `010-hub-proxima-sessao` | Cartão de próxima sessão de julgamento do CADE no dashboard |
 | `011-agenda-prazos-ac` | Linha do tempo de prazos de AC sumário, convites de calendário e auto-encerramento |
 | `012-autos-processo-pacote` | Pacote ZIP de documentos públicos de um processo |
+| `013-precedentes-due-diligence` | Precedentes — fundação: caso de due diligence, empresas, fatos com evidência e histórico versionado |
 
 ---
 

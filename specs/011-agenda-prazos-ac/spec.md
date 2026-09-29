@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Agenda / Prazos / Lembretes / Calendário: calendário oficial de expediente do CADE (`calendario.py`), linha do tempo de prazos de um AC sumário a partir dos documentos (`prazos.py`), convites de calendário que se atualizam se a previsão mudar (`agenda.py`)." Porte do comportamento dos módulos homônimos do projeto irmão "Mesk". Decisões de escopo já tomadas em conversa com o dono do projeto (ver Assumptions): lembretes = só convite de calendário (sem push proativo "N dias antes"); convite só para os prazos "do escritório" (análise da SG e certidão final); auto-encerramento portado como no Mesk, **incluindo o apagamento irreversível** do processo/assinantes/documentos 10 dias após a certidão sem nova movimentação.
+**Input**: User description: "Agenda / Prazos / Lembretes / Calendário: calendário oficial de expediente do CADE (`calendario.py`), linha do tempo de prazos de um AC sumário a partir dos documentos (`prazos.py`), convites de calendário que se atualizam se a previsão mudar (`agenda.py`)." Decisões de escopo já tomadas em conversa com o dono do projeto (ver Assumptions): lembretes = só convite de calendário (sem push proativo "N dias antes"); convite só para os prazos "do escritório" (análise da SG e certidão final); auto-encerramento, **incluindo o apagamento irreversível** do processo/assinantes/documentos 10 dias após a certidão sem nova movimentação.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -277,14 +277,14 @@ nenhum deve apagar mesmo com 10+ dias), confirmar o comportamento esperado em ca
 - **Só os prazos "do escritório" (análise da SG, certidão final) geram convite** (decisão
   confirmada em conversa) — terceiro interessado e recurso/avocação são prazos do CADE/de
   terceiros, informativos na linha do tempo, sem convite de calendário.
-- **Auto-encerramento portado como no Mesk, apagamento real e irreversível** (decisão confirmada
-  em conversa, com plena ciência de que é destrutivo) — mantendo as mesmas quatro guardas de
-  segurança do comportamento original (FR-017/FR-018), para minimizar o risco de apagar processo
+- **Auto-encerramento com apagamento real e irreversível** (decisão confirmada
+  em conversa, com plena ciência de que é destrutivo) — com quatro guardas de
+  segurança (FR-017/FR-018), para minimizar o risco de apagar processo
   ativo por engano.
 - **Fonte da camada de suspensões específicas do CADE (além do calendário nacional de feriados)
-  fica fora do escopo desta versão**: o Mesk também consulta um endpoint de busca do gov.br
+  fica fora do escopo desta versão**: existe um endpoint de busca do gov.br
   (domínio diferente de `in.gov.br`/`gov.br/cade`, já em escopo) para comunicados avulsos de
-  suspensão de prazo específicos do CADE; portar essa camada exigiria uma nova avaliação de escopo
+  suspensão de prazo específicos do CADE; incluir essa camada exigiria uma nova avaliação de escopo
   do Princípio II. O calendário nacional de feriados (já em escopo via `in.gov.br`, emenda v2.2.0)
   é suficiente para a maioria dos casos e cobre o v1 — a camada de comunicados avulsos fica
   registrada como melhoria futura.
