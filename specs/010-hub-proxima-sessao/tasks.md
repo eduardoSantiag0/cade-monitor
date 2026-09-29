@@ -38,11 +38,11 @@
 ### Tests for User Story 1
 
 - [X] T004 [P] [US1] Fixture em `apps/dashboard/tests/fixtures/calendario_sessoes.html` (HTML
-  simplificado no padrão ano→mês→dia do Mesk, com pelo menos 2 sessões: uma cuja data cai no
+  simplificado no padrão ano→mês→dia, com pelo menos 2 sessões: uma cuja data cai no
   passado relativo a uma data de teste fixa, outra no futuro).
   `apps/dashboard/tests/fixtures/calendario_sem_sessao_futura.html` (só sessões passadas).
-- [X] T005 [P] [US1] Teste em `apps/dashboard/tests/test_hub.py`: `sessoes_do_html` (adaptado do
-  Mesk) extrai `[(data_iso, titulo), ...]` corretamente do fixture T004.
+- [X] T005 [P] [US1] Teste em `apps/dashboard/tests/test_hub.py`: `sessoes_do_html` extrai
+  `[(data_iso, titulo), ...]` corretamente do fixture T004.
 - [X] T006 [P] [US1] Teste em `apps/dashboard/tests/test_hub.py` (mock de `urlopen` + `cache`):
   `refresh_sessoes` busca a fonte, grava `cache.get('hub:sessoes')` com o resultado de
   `sessoes_do_html`, e uma segunda chamada dentro do intervalo mínimo (`HUB_FETCH_MIN_INTERVAL_SECONDS`)
@@ -62,8 +62,7 @@
 ### Implementation for User Story 1
 
 - [X] T011 [US1] Implementar `sessoes_do_html(html: str) -> list[tuple[str, str]]` em
-  `apps/dashboard/hub.py` (adaptado de `cademon/hub.py`, mesma lógica linha-a-linha
-  ano→mês→dia). *(depende de T005)*
+  `apps/dashboard/hub.py` (mesma lógica linha-a-linha ano→mês→dia). *(depende de T005)*
 - [X] T012 [US1] Implementar `refresh_sessoes(timeout, user_agent)` em `apps/dashboard/hub.py`:
   gate de cadência via `cache.get/set('hub:last_attempt:sessoes', ...)`, HTTP GET (stdlib
   `urllib`, mesmo padrão de `apps/monitoring/clients.py`), parsing via T011, grava
@@ -98,7 +97,7 @@ ponta, sem link de pauta ainda.
   (contém um link `cdn.cade.gov.br/.../2026/269/....pauta....pdf`), `pautas_2026_sem_pdf.html`
   (sem nenhum link de pauta para a sessão em teste).
 - [X] T018 [P] [US2] Teste em `apps/dashboard/tests/test_hub.py`: `pauta_do_html(html, ano,
-  numero)` (adaptado do Mesk) extrai a URL correta do fixture "com PDF"; devolve `''` no fixture
+  numero)` extrai a URL correta do fixture "com PDF"; devolve `''` no fixture
   "sem PDF".
 - [X] T019 [P] [US2] Testes em `apps/dashboard/tests/test_hub.py` (mock de `urlopen` + `cache`):
   `refresh_pauta` busca a fonte, grava `cache.get(f'hub:pauta:{ano}:{numero}')`, respeita a
@@ -113,8 +112,8 @@ ponta, sem link de pauta ainda.
 
 ### Implementation for User Story 2
 
-- [X] T022 [US2] Implementar `pauta_do_html(html, ano, numero)` em `apps/dashboard/hub.py`
-  (adaptado do Mesk). *(depende de T018)*
+- [X] T022 [US2] Implementar `pauta_do_html(html, ano, numero)` em `apps/dashboard/hub.py`.
+  *(depende de T018)*
 - [X] T023 [US2] Implementar `refresh_pauta(timeout, user_agent)` em `apps/dashboard/hub.py`:
   chama `proxima_sessao()` primeiro (sem sessão futura conhecida, retorna sem HTTP); extrai
   ano/número do título (regex `\d+ª`); gate de cadência; HTTP GET; parsing via T022; grava no

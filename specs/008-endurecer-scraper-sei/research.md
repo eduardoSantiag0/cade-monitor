@@ -1,8 +1,7 @@
 # Research: Endurecimento da resolução de processo no SEI/CADE
 
 Nenhum item do Technical Context ficou como `NEEDS CLARIFICATION` — a stack, o padrão de testes e
-a estratégia técnica já estão determinados pelo código existente (`apps/monitoring/`) e pelo
-comportamento já validado em produção no scraper do projeto irmão Mesk (`cademon/scraper.py`).
+a estratégia técnica já estão determinados pelo código existente (`apps/monitoring/`).
 Este documento registra as decisões e as alternativas descartadas.
 
 ## 1. Estratégia de múltiplas buscas (protocolo → texto → nº de documento)
@@ -11,8 +10,7 @@ Este documento registra as decisões e as alternativas descartadas.
   variando `txtProtocoloPesquisa`, depois adicionando `q`/`as_q`/`txtTextoPesquisa`, depois
   também `txtNumeroDocumentoPesquisa` — e tenta cada um em sequência, parando no primeiro que
   `extract_process_detail_url` conseguir resolver.
-- **Rationale**: é exatamente o que `fetch_cade_search_snapshot` faz em `cademon/scraper.py`
-  (linhas ~2100–2201), testado ao vivo contra `sei.cade.gov.br` numa verificação anterior desta
+- **Rationale**: testado ao vivo contra `sei.cade.gov.br` numa verificação anterior desta
   mesma sessão de trabalho. Resolve o cenário relatado (User Story 1): processos que só aparecem
   na busca por texto livre ou por número de documento.
 - **Alternatives considered**:
@@ -30,7 +28,7 @@ Este documento registra as decisões e as alternativas descartadas.
   CADE Monitor efetivamente controla (número do processo, checkboxes de tipo de busca etc.).
 - **Rationale**: elimina a dependência de manter uma lista de campos ocultos hardcoded no código
   — se o SEI adicionar um campo novo (token anti-CSRF, campo de paginação etc.), ele é capturado
-  automaticamente. É o mesmo padrão do Mesk (`InputDefaultsParser`, `extract_input_defaults`).
+  automaticamente.
 - **Alternatives considered**:
   - Continuar com o payload fixo e só atualizar manualmente quando quebrar — rejeitado, é
     exatamente o modo de falha que a User Story 3 descreve (manutenção reativa, app fora do ar
@@ -45,7 +43,7 @@ Este documento registra as decisões e as alternativas descartadas.
 - **Decision**: nova função `normalize_cade_process_number(value)` que remove um zero extra no
   início do primeiro bloco de dígitos quando o restante do número bate com o formato
   `NNNNN.NNNNNN/NNNN-NN`, chamada antes de montar qualquer payload de busca.
-- **Rationale**: mesmo fix já em produção no Mesk; erro de digitação comum e de baixo risco de
+- **Rationale**: erro de digitação comum e de baixo risco de
   corrigir (o padrão remanescente já precisa bater exatamente com o formato oficial do CADE).
 - **Alternatives considered**:
   - Validar e rejeitar números com zero a mais, pedindo para o usuário corrigir — rejeitado,
@@ -60,18 +58,17 @@ Este documento registra as decisões e as alternativas descartadas.
   há exatamente um link candidato na página inteira e ele está associado à menção do processo.
 - **Rationale**: a busca por texto livre/nº de documento (novas nesta feature) pode listar mais de
   um processo relacionado na mesma página de resultado; sem essa checagem, o sistema poderia
-  resolver para o processo errado. Mesma ideia de `extract_process_detail_url` +
-  `process_detail_url_near_reference` do Mesk, simplificada (sem a segunda passada de "contexto
-  textual ±1000 caracteres" do Mesk, que não se mostrou necessária para os formatos de página já
-  cobertos pelos testes existentes).
+  resolver para o processo errado. A checagem por linha de tabela cobre os formatos de página já
+  exercitados pelos testes existentes, sem precisar de uma segunda passada de "contexto textual
+  ±1000 caracteres" em volta do link.
 - **Alternatives considered**:
   - Sempre usar o primeiro link da página, como hoje — rejeitado, é seguro apenas quando a busca é
     por protocolo exato (praticamente garante um único resultado); deixa de ser seguro assim que
     as novas estratégias (texto/documento) entram em jogo.
-  - Portar a lógica completa do Mesk (`process_detail_url_near_reference`, incluindo o fallback de
-    proximidade textual) — considerado, mas adiado: aumenta a superfície de código sem um caso de
-    teste real que hoje exija esse nível de refinamento; pode ser adicionado depois se aparecer um
-    formato de página que a checagem por linha de tabela não cubra.
+  - Adicionar um fallback de proximidade textual (contexto ±1000 caracteres em volta do link,
+    quando a linha de tabela não resolver) — considerado, mas adiado: aumenta a superfície de código
+    sem um caso de teste real que hoje exija esse nível de refinamento; pode ser adicionado depois
+    se aparecer um formato de página que a checagem por linha de tabela não cubra.
 
 ## 5. Compatibilidade com a interface pública existente
 
@@ -100,8 +97,7 @@ hoje em produção** (o código anterior a esta feature também não define `par
 cegamente no primeiro link da página).
 
 - **Decision revista**: `_build_search_payload_attempts` agora monta `partialfields` como
-  `prot_pesq:*{dígitos_do_protocolo}* AND sta_prot:P` — a mesma consulta Solr que o Mesk usa em
-  `fetch_cade_search_snapshot` — para todas as três estratégias de busca.
+  `prot_pesq:*{dígitos_do_protocolo}* AND sta_prot:P` para todas as três estratégias de busca.
 - **Por que a decisão original (seção 1) estava errada**: eu tinha descartado portar
   `partialfields` por avaliação estática do código, sem testar ao vivo primeiro. O teste ao vivo
   mostrou que, sem ele, o campo `txtProtocoloPesquisa` sozinho **não filtra** a busca no backend

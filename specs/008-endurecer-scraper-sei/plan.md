@@ -11,8 +11,7 @@ SEI com uma única tentativa de POST, usando um payload de campos ocultos fixado
 buscando somente pelo campo de protocolo. Isso falha silenciosamente quando (a) só a busca por
 texto livre ou por número de documento encontraria o processo, (b) o SEI muda um campo oculto do
 formulário, ou (c) o usuário digita o número com um zero a mais no início. A abordagem técnica é
-portar o comportamento já validado em produção no scraper do projeto irmão "Mesk"
-(`cademon/scraper.py`): ler os defaults do formulário via uma requisição GET antes de montar o
+ler os defaults do formulário via uma requisição GET antes de montar o
 POST, tentar em sequência três estratégias de busca (protocolo → texto → nº de documento) parando
 na primeira que resolver, normalizar o número do processo antes de pesquisar, e escolher o link de
 detalhe pelo trecho da página que realmente cita o processo pesquisado (em vez do primeiro link da
@@ -53,7 +52,7 @@ resolução de um único processo por vez.
 
 | Princípio | Avaliação |
 |---|---|
-| I. Simplicidade Operacional | **PASS** — continua usando só `urllib` da stdlib; não introduz serviço, fila ou processo novo. O fallback via navegador (Playwright) do Mesk foi deliberadamente deixado fora de escopo (ver spec.md, Assumptions) por exigir uma dependência de runtime nova. |
+| I. Simplicidade Operacional | **PASS** — continua usando só `urllib` da stdlib; não introduz serviço, fila ou processo novo. O fallback via navegador (Playwright) foi deliberadamente deixado fora de escopo (ver spec.md, Assumptions) por exigir uma dependência de runtime nova. |
 | II. Monitoramento Responsável | **PASS** — continua HTTP não autenticado a endpoints públicos, sequencial (sem burst/paralelismo). A busca por formulário já usa POST desde a feature 001 (comportamento pré-existente, não introduzido aqui); a mudança amplia de 1 para até 4 requisições *dentro de um mesmo ciclo* de resolução, sem alterar a cadência mínima entre ciclos (≥ 25 min/processo). |
 | III. Django Monolítico Bem Organizado | **PASS** — mudança inteira dentro do app `monitoring` já existente (`clients.py`, `extractors.py`); nenhuma lógica de negócio nova em views/models. |
 | IV. PostgreSQL em Produção | **N/A** — sem mudança de schema ou migration. |
@@ -102,8 +101,8 @@ para não quebrar nenhum outro chamador que hoje o use sem número de processo.
 ## Complexity Tracking
 
 > Sem violações da constituição a justificar. A única complexidade deliberadamente **não**
-> adicionada foi o fallback via navegador headless (Playwright) do Mesk:
+> adicionada foi o fallback via navegador headless (Playwright):
 
-| Violação (não aplicada) | Por que o Mesk precisou | Por que não portar agora |
+| Violação (não aplicada) | Quando seria necessária | Por que não adicionar agora |
 |---|---|---|
 | Navegador headless (Playwright) para páginas dependentes de JS | Algumas páginas do SEI só renderizam certos dados via JavaScript | Introduziria dependência de runtime nova e maior consumo de memória, contrariando o Princípio I (VM de 1–2 vCPU / ≤ 512 MB); as 3 estratégias de busca via HTTP simples já resolvem o problema relatado (busca falhando silenciosamente); pode virar feature própria se surgir um caso real que exija JS |

@@ -45,7 +45,7 @@ e `apps/processes/views.py::detail` (leitura, linha do tempo).
 ### `build_ics(uid: str, sequence: int, method: str, summary: str, event_date: date) -> bytes`
 
 - `method` ∈ `'REQUEST'`, `'CANCEL'`. Gera o `.ics` mínimo (evento de dia inteiro, RFC 5545,
-  dobra de linha em 75 octetos) — ver research.md para os campos replicados do Mesk.
+  dobra de linha em 75 octetos) — ver research.md para o racional dos campos escolhidos.
 
 ## `apps/agenda/services.py`
 

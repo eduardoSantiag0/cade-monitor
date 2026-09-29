@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Pacote ZIP dos documentos públicos de um processo monitorado (Autos)." Port do comportamento público de `autos_pacote.py` do projeto irmão "Mesk". Decisão já confirmada com o dono do projeto: a metade confidencial (pasta Confidencial/, documentos restritos via sessão autenticada do SEI) e `autos_vigia.py` ficam inteiramente fora de escopo desta versão — exigiriam sessão autenticada/credencial de usuário no SEI, o que contraria o Princípio II atual da constituição.
+**Input**: User description: "Pacote ZIP dos documentos públicos de um processo monitorado (Autos)." Decisão já confirmada com o dono do projeto: a metade confidencial (pasta Confidencial/, documentos restritos via sessão autenticada do SEI) e um vigia de vínculo de documento restrito ficam inteiramente fora de escopo desta versão — exigiriam sessão autenticada/credencial de usuário no SEI, o que contraria o Princípio II atual da constituição.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -197,7 +197,7 @@ para download.
 ## Assumptions
 
 - A metade confidencial (pasta "Confidencial/", documentos restritos via sessão autenticada do
-  SEI) e o vigia de vínculo de documento restrito (`autos_vigia.py` no Mesk) ficam inteiramente
+  SEI) e um vigia de vínculo de documento restrito ficam inteiramente
   fora de escopo desta versão — decisão confirmada com o dono do projeto, por exigirem sessão
   autenticada/credencial de usuário no SEI, o que contraria o Princípio II atual da constituição.
   Retomar esse escopo no futuro exigiria uma emenda de constituição própria.

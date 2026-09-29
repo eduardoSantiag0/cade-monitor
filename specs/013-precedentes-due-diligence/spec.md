@@ -6,11 +6,11 @@
 
 **Status**: Draft
 
-**Input**: User description: "Precedentes: due diligence de atos de concentração — dossiê e busca de precedentes para caso de fusão/aquisição em análise no CADE." Port do comportamento do módulo irmão `cademon/prec_*.py`/`precedentes.py` do projeto "Mesk" (~13.500 linhas em 20 arquivos — pesquisado via 6 agentes de pesquisa paralelos antes desta spec).
+**Input**: User description: "Precedentes: due diligence de atos de concentração — dossiê e busca de precedentes para caso de fusão/aquisição em análise no CADE."
 
-**Escopo desta spec**: esta é a **primeira de uma série de specs** dentro da iniciativa "Precedentes" (confirmado com o dono do projeto: o volume — 16 tabelas, pipeline de 8 etapas no Mesk — e o número de fontes/decisões novas tornam uma spec monolítica inadequada, Princípios III/VIII). Esta spec cobre só a **fundação**: o modelo de dados de um caso de due diligence (empresas, fatos, evidências) e a disciplina de revisão humana com histórico versionado — o princípio central "fato ≠ análise, tudo com evidência anexada" do Mesk. Dados são inseridos manualmente pelo advogado nesta versão; nenhuma fonte externa nova é consultada. Pesquisa societária automática (SEC/EDGAR, CVM, Receita Federal), busca de jurisprudência (Solr do CADE), extração de documentos e relatório final ficam para specs seguintes, cada uma com suas próprias decisões de escopo/constituição.
+**Escopo desta spec**: esta é a **primeira de uma série de specs** dentro da iniciativa "Precedentes" (confirmado com o dono do projeto: o volume — 16 tabelas, pipeline de 8 etapas — e o número de fontes/decisões novas tornam uma spec monolítica inadequada, Princípios III/VIII). Esta spec cobre só a **fundação**: o modelo de dados de um caso de due diligence (empresas, fatos, evidências) e a disciplina de revisão humana com histórico versionado — o princípio central "fato ≠ análise, tudo com evidência anexada". Dados são inseridos manualmente pelo advogado nesta versão; nenhuma fonte externa nova é consultada. Pesquisa societária automática (SEC/EDGAR, CVM, Receita Federal), busca de jurisprudência (Solr do CADE), extração de documentos e relatório final ficam para specs seguintes, cada uma com suas próprias decisões de escopo/constituição.
 
-**Decisão já tomada com o dono do projeto**: **sem IA nesta versão** (nem nas futuras specs de extração, por ora) — nenhuma chamada a provedor de IA em nenhum ponto desta funcionalidade. Campos que, no Mesk, dependiam de extração por IA ficam de fora ou exigem entrada manual do advogado; nada é adivinhado.
+**Decisão já tomada com o dono do projeto**: **sem IA nesta versão** (nem nas futuras specs de extração, por ora) — nenhuma chamada a provedor de IA em nenhum ponto desta funcionalidade. Campos que dependeriam de extração por IA ficam de fora ou exigem entrada manual do advogado; nada é adivinhado.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,8 +69,7 @@ ainda precisam de atenção.
    exibido, **Then** a citação e a fonte aparecem junto do valor — nunca um valor sem se saber de
    onde veio.
 4. **Given** um fato sem nenhuma fonte informada, **When** o advogado tenta salvá-lo com status
-   "confirmado", **Then** o sistema não aceita — confirmado sem fonte não é confirmado (mesma regra
-   do Mesk: "confirmado sem citação não é confirmado").
+   "confirmado", **Then** o sistema não aceita — "confirmado sem citação não é confirmado".
 
 ---
 
@@ -110,7 +109,7 @@ interpretativa) associada explicitamente aos fatos em que ela se baseia — nunc
 fatos em si. A página do caso mostra fatos e análises em seções/destaques visualmente distintos, de
 forma que ninguém confunda "o que está documentado" com "o que o advogado concluiu a partir disso".
 
-**Why this priority**: é o princípio central do Mesk ("fato ≠ análise") aplicado desde o início,
+**Why this priority**: é o princípio central desta iniciativa ("fato ≠ análise") aplicado desde o início,
 mesmo antes de haver pesquisa automatizada — evita que o hábito de misturar fato e interpretação se
 instale desde a v1.
 
@@ -211,13 +210,13 @@ referências visíveis para os 2 fatos que a sustentam.
   (SEC/EDGAR, CVM, Receita Federal — exige emenda de constituição própria, fontes novas) e busca de
   jurisprudência no CADE (Solr, já em escopo pela emenda v2.2.0) ficam para specs seguintes desta
   mesma iniciativa "Precedentes".
-- Extração automática de dados de PDFs de pareceres/votos (o que, no Mesk, dependia de IA) fica
+- Extração automática de dados de PDFs de pareceres/votos (o que dependeria de IA) fica
   fora de escopo desta spec inteira — quando uma spec futura tratar de extração de documentos, será
   só por regra/regex (nomes de campo, formato de data, rótulos fixos), nunca por IA, seguindo a
   decisão já tomada.
 - O "papel" da empresa no caso (requerente, parte identificada) usa uma lista fixa e pequena de
-  valores — suficiente para due diligence de atos de concentração, sem a sofisticação de grupo
-  econômico automático do Mesk (isso, quando/se vier, é melhoria futura).
+  valores — suficiente para due diligence de atos de concentração, sem grafo de relações
+  societárias/grupo econômico automático (isso, quando/se vier, é melhoria futura).
 - Um caso não precisa estar ligado a um `MonitoredProcess` já monitorado neste sistema — devido
   diligence pode começar antes de haver um processo público no SEI para acompanhar.
 - Relatório final, cofre/base de conhecimento (cache de documentos entre casos), pesquisa

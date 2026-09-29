@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Hub: dados da tela inicial (ex. sessão de julgamento ao vivo do CADE)". Porte do comportamento do módulo `cademon/hub.py` do projeto irmão "Mesk", com escopo reduzido para caber no dashboard interno (autenticado) já existente do cade-monitor — ver Assumptions para o que foi deliberadamente deixado de fora e por quê.
+**Input**: User description: "Hub: dados da tela inicial (ex. sessão de julgamento ao vivo do CADE)". Cartão de "próxima sessão de julgamento" com escopo reduzido para caber no dashboard interno (autenticado) já existente do cade-monitor — ver Assumptions para o que foi deliberadamente deixado de fora e por quê.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -123,18 +123,17 @@ aparece sem link e sem erro.
 
 ## Assumptions
 
-- **Escopo reduzido em relação ao `hub.py` original do Mesk** (decisão de engenharia, não requer
+- **Escopo deliberadamente reduzido** (decisão de engenharia, não requer
   aprovação do dono do projeto — ver plan.md/research.md para o racional completo):
   - **Fora de escopo nesta versão**: status de transmissão ao vivo no YouTube (`youtube.com` é um
     domínio de terceiro fora do escopo atual do Princípio II; o valor para um painel interno de
     equipe é menor que o do calendário de sessões) e a cidade do visitante via geolocalização de
-    IP (`cidade_do_ip`/`ip-api.com` no Mesk) — esse dado fazia sentido numa capa pública
-    voltada a visitantes externos; o dashboard do cade-monitor é autenticado, para a própria
-    equipe, onde esse dado não tem propósito.
+    IP — esse dado faria sentido numa capa pública voltada a visitantes externos; o dashboard do
+    cade-monitor é autenticado, para a própria equipe, onde esse dado não tem propósito.
   - **Fora de escopo, delegado à feature de Agenda/Prazos**: os helpers de formatação de data por
-    extenso e contagem de prazo (`data_por_extenso`, `dias_ate`, `prazo_selo`/`prazo_frase`) do
-    `hub.py` original pertencem, em espírito, à calculadora de prazos (`calendario.py`), que será
-    portada como sua própria feature — evita duplicar essa lógica aqui.
+    extenso e contagem de prazo (`data_por_extenso`, `dias_ate`, `prazo_selo`/`prazo_frase`)
+    pertencem, em espírito, à calculadora de prazos (`calendario.py`), que será implementada como
+    sua própria feature — evita duplicar essa lógica aqui.
 - O dashboard já existente (`apps/dashboard/`, autenticado) é o único lugar onde o cartão de
   sessão aparece nesta versão — não há capa pública nova.
 - `www.gov.br/cade` (calendário e pautas de sessão) é tratado como página pública do CADE já em

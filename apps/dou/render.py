@@ -2,9 +2,8 @@
 Formatação do digest DOU (spec 009) para e-mail: negrito de título/partes, truncamento
 de despacho longo, destaque (fundo amarelo) por termo monitorado, rodapé de atas/pautas.
 
-A lógica de extração de padrões (título de caso, rótulo de partes) é adaptada do módulo
-irmão `cademon/dou.py` (projeto Mesk, mesmo dono) — regexes já validados em produção
-contra anos de boletins reais do CADE. Versão simplificada para o v1: sem a extração
+Os regexes de extração de padrões (título de caso, rótulo de partes) foram calibrados
+contra boletins reais do CADE. Versão simplificada para o v1: sem a extração
 completa de despacho (cabeçalho SEI, assinatura eletrônica etc. — ver research.md).
 """
 from __future__ import annotations

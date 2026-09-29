@@ -3,8 +3,7 @@ Classificação de processo, identificação de documentos e fórmula/linha do t
 prazos de um Ato de Concentração Sumário (spec 011). Módulo puramente funcional —
 sem acesso ao banco, exceto via `calendar_source.is_business_day`/`year_is_confirmed`.
 
-Fórmula de prazo (FR-004) e formato de classificação portados do Mesk
-(`cademon/calendario.py`/`cademon/dou.py::_SEI_CAMPO_FORMULARIO_RE`) — ver research.md
+Fórmula de prazo (FR-004) e formato de classificação — ver research.md
 para o racional e para o que ficar "a confirmar na implementação".
 """
 from __future__ import annotations

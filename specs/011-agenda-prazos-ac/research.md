@@ -11,14 +11,14 @@
   úteis relevantes para o cálculo de prazo, e a fonte já está em escopo — zero custo
   constitucional adicional.
 - **Alternativas descartadas**: (a) a camada de comunicados avulsos específicos do CADE (suspensão
-  pontual de prazo), que no Mesk vem de um endpoint de busca (`portalunico.estaleiro.serpro.gov.br`)
+  pontual de prazo, disponível via um endpoint de busca em `portalunico.estaleiro.serpro.gov.br`)
   fora do domínio já coberto pela constituição — descartada para o v1 porque exigiria uma nova
   avaliação de escopo do Princípio II (mesma decisão de "adiar" já tomada para PDF de ata/pauta na
   feature 009), sem impedir que o v1 já calcule prazos corretos na maioria dos casos; (b) manter
   uma tabela de feriados fixa no código (sem sincronização) — descartada porque o calendário muda
   todo ano (Portaria nova) e ficaria desatualizado silenciosamente, o oposto do espírito de
   "nunca usar dado não confirmado como certeza" da spec (FR-011).
-- **Validação de ato oficial (FR-002)**: mesmo critério do Mesk — é Portaria, do(s) órgão(s)
+- **Validação de ato oficial (FR-002)**: critério de validação — é Portaria, do(s) órgão(s)
   competente(s) (Ministério da Gestão e Inovação em Serviços Públicos, ou nome histórico
   equivalente), publicada na Seção 1, não revogada, referencia o ano-alvo, tem um número mínimo de
   datas extraídas, nenhuma fora do ano. Documentar aqui, após a validação ao vivo, se algum desses
@@ -26,22 +26,24 @@
 
 ## Fórmula de prazo (`calcula_prazo_cade`)
 
-- **Decisão**: portar a fórmula do Mesk como está (FR-004): início = primeiro dia útil do CADE
+- **Decisão**: fórmula (FR-004): início = primeiro dia útil do CADE
   estritamente após a data-evento; vencimento preliminar = início + (dias−1) corridos;
   vencimento final = preliminar, ou o próximo dia útil se cair em dia não útil.
-- **Rationale**: é uma fórmula já validada em produção contra prazos reais do CADE; reimplementar
-  diferente sem motivo introduziria risco sem benefício.
+- **Rationale**: é a forma como o CADE conta esse prazo — os dias do meio contam corridos, só os
+  dois extremos (início e vencimento) são ajustados para dia útil; reimplementar diferente sem
+  motivo introduziria risco sem benefício.
 - **Alternativas descartadas**: contar só em dias úteis (cada um dos "N dias" sendo um dia útil) —
-  descartada porque não é assim que o CADE conta (confirmado pelo próprio comentário do código
-  original do Mesk, replicado como comentário aqui): só os dois extremos (início e vencimento)
-  são ajustados para dia útil, os dias do meio contam corridos.
+  descartada porque não é assim que o CADE conta (documentado como comentário no código desta
+  feature, `apps/agenda/deadlines.py`): só os dois extremos (início e vencimento) são ajustados
+  para dia útil, os dias do meio contam corridos.
 
 ## Classificação do processo (Ato de Concentração Sumário)
 
 - **Decisão**: extrair a classificação de um trecho do próprio `MonitoredProcess.last_text` (campo
-  "Tipo:"/"Tipo de Processo:" já presente no HTML do SEI, mesmo padrão que o `dou.py` do Mesk já
-  precisou reconhecer e descartar do texto formatado — `_SEI_CAMPO_FORMULARIO_RE`), com lista de
-  exclusão explícita para classificações parecidas (ordinário, apuração, consulta, recurso).
+  "Tipo:"/"Tipo de Processo:" já presente no HTML do SEI, reconhecido e descartado do texto
+  formatado por um regex dedicado, mesmo padrão já usado para outros campos rotulados do SEI), com
+  lista de exclusão explícita para classificações parecidas (ordinário, apuração, consulta,
+  recurso).
 - **Rationale**: evita nova fonte externa — o dado já está no texto que `apps/monitoring` já
   coleta.
 - **A confirmar na implementação**: o formato exato do rótulo dessa classificação no HTML real do
@@ -51,13 +53,14 @@
 
 ## Geração de `.ics`
 
-- **Decisão**: gerar o conteúdo do arquivo por template de texto puro (stdlib), replicando a
-  técnica do Mesk: UID estável por (processo, tipo de prazo), `SEQUENCE` incrementado a cada
+- **Decisão**: gerar o conteúdo do arquivo por template de texto puro (stdlib): UID estável por
+  (processo, tipo de prazo), `SEQUENCE` incrementado a cada
   atualização, `METHOD:REQUEST`/`METHOD:CANCEL`, dobra de linha em 75 octetos (RFC 5545),
   `TRANSP:TRANSPARENT` + `X-MICROSOFT-CDO-ALLDAYEVENT:TRUE` para evento de dia inteiro.
 - **Rationale**: nenhuma dependência nova (Princípio VIII); o formato `.ics` é simples o bastante
-  para não justificar uma lib externa, e o Mesk já validou essa abordagem em produção (Outlook e
-  Gmail).
+  para não justificar uma lib externa — os campos gerados seguem RFC 5545 e as extensões usadas
+  por Outlook/Gmail para eventos de dia inteiro (`TRANSP:TRANSPARENT`,
+  `X-MICROSOFT-CDO-ALLDAYEVENT`).
 - **Anexo com `method=`**: `send_email_notification` (`apps/notifications/channels/email.py`) hoje
   aceita anexos com `content_type` livre, mas não propaga um parâmetro `method=` no cabeçalho
   `Content-Type` do anexo — necessário para os botões de Aceitar/Recusar aparecerem no Gmail/
@@ -78,9 +81,9 @@
 - **Rationale**: reaproveitar o estado que `apps/monitoring` já mantém evita inconsistência (dois
   lugares dizendo coisas diferentes sobre "a última verificação foi bem-sucedida?").
 - **Alternativas descartadas**: arquivar (`ProcessStatus.ARCHIVED`) em vez de apagar — essa era a
-  alternativa mais segura e foi explicitamente rejeitada pelo dono do projeto em favor de replicar
-  o comportamento original do Mesk; documentado aqui para que a decisão fique rastreável (não foi
-  uma omissão, foi escolha consciente).
+  alternativa mais segura e foi explicitamente rejeitada pelo dono do projeto, que confirmou
+  preferir o apagamento real e irreversível (ver spec.md); documentado aqui para que a decisão
+  fique rastreável (não foi uma omissão, foi escolha consciente).
 - **Revisão de segurança (T052, pós-implementação)**: releitura crítica de `run_auto_closure`
   (`apps/agenda/services.py`) confirmando, linha a linha: (1) as 4 guardas
   (`guarda_certidao_confianca_alta`, `guarda_sem_movimentacao_recente`,
@@ -99,9 +102,7 @@
 
 ### Busca do calendário oficial (`busca_dou`/`texto_integral_dou`)
 
-Validado ao vivo contra o ano de 2026 (Portaria MGI Nº 11.460, de 29/12/2025) — a mesma portaria
-já usada como semente fixa no Mesk (`cademon/calendario.py::entradas_semente_2026`), o que serviu
-de confirmação independente de que a busca (`busca_dou`) encontra o ato certo: `hierarchyStr`
+Validado ao vivo contra o ano de 2026 (Portaria MGI Nº 11.460, de 29/12/2025): `hierarchyStr`
 ("Ministério da Gestão e da Inovação em Serviços Públicos/Gabinete da Ministra") e `pubName`
 ("DO1") bateram com os critérios de `_valida_portaria` de primeira.
 
@@ -116,8 +117,8 @@ individual do in.gov.br não tem esse script — o corpo vem em HTML puro, dentr
 
 **Correção aplicada**: `texto_integral_dou` ganhou um segundo fallback (depois do `_params_dou`,
 que continua tentado primeiro e pode servir noutra página que o use) que extrai e limpa o conteúdo
-de `class="texto-dou"` via regex — o mesmo padrão que o `texto_integral_dou` do Mesk já usava como
-fallback e que a leitura inicial deste port tinha deixado de fora. Após a correção, a busca do
+de `class="texto-dou"` via regex — padrão que a implementação inicial desta feature tinha deixado
+de fora. Após a correção, a busca do
 calendário de 2026 foi revalidada ao vivo com sucesso: 19 entradas extraídas (9 feriados nacionais
 + 10 pontos facultativos), todas as datas batendo com o ano-alvo, ato "11.460" reconhecido,
 validação passando em todos os critérios de FR-002.
@@ -138,7 +139,6 @@ funcionar de todo contra dados reais).
 `MonitoredProcess` com `last_text` preenchido (`MonitoredProcess.objects.exclude(last_text='').count()
 == 0`), então não havia um processo real conhecido como AC sumário para conferir o formato exato
 do rótulo "Tipo de Processo:" (tasks.md T051 já previa essa possibilidade: "se houver algum já
-cadastrado"). `classifica_processo` fica com a extrapolação documentada acima (padrão
-`_SEI_CAMPO_FORMULARIO_RE` já validado pelo `dou.py` do Mesk para o mesmo rótulo do SEI) —
+cadastrado"). `classifica_processo` fica com a extrapolação documentada acima —
 acompanhamento pendente: validar contra o primeiro AC sumário real cadastrado em produção, e
 ajustar o regex/lista de exclusão se o formato divergir, documentando aqui quando isso acontecer.

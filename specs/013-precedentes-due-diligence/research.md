@@ -1,10 +1,9 @@
 # Research: Precedentes — dossiê de due diligence (fundação)
 
-## Fonte do desenho: 6 agentes de pesquisa paralelos sobre o Mesk
+## Decisões de desenho desta fundação
 
-Antes desta spec, 6 pesquisas paralelas leram as ~13.500 linhas de `cademon/prec_*.py` +
-`precedentes.py` + `web_precedentes.py` (20 arquivos). Resumo das decisões que vieram dessa
-pesquisa e foram aplicadas ao escopo desta primeira spec:
+Este documento registra as decisões de desenho do modelo de dados e da disciplina de revisão
+humana desta primeira spec da iniciativa "Precedentes", e as alternativas descartadas:
 
 ## Versionamento de fato: uma tabela append-only, não uma tabela + histórico separado
 
@@ -12,14 +11,13 @@ pesquisa e foram aplicadas ao escopo desta primeira spec:
   corrigir insere uma linha nova (nunca `UPDATE` do valor), com uma self-FK `root` apontando para a
   primeira versão do grupo (`root=None` na própria raiz). `is_current=True` marca a versão vigente;
   corrigir desmarca a anterior e marca a nova.
-- **Rationale**: é exatamente o padrão `raiz_id`/`ativo` do Mesk (`prec_facts`, confirmado pela
-  pesquisa de cross-análise/revisão), só que expresso como self-FK Django em vez de um inteiro de
-  agrupamento manual — mesma garantia (nada é sobrescrito, histórico sempre consultável), estrutura
-  mais idiomática ao Django.
+- **Rationale**: expressa a garantia de append-only (nada é sobrescrito, histórico sempre
+  consultável) como self-FK Django em vez de um inteiro de agrupamento manual — estrutura
+  idiomática ao Django para essa garantia.
 - **Alternativas descartadas**: uma tabela `PrecedentFact` (estado atual) + `PrecedentFactVersion`
-  (histórico separado) — descartada por duplicar a modelagem sem ganho: o Mesk já prova que uma
-  única tabela append-only basta, e ter duas tabelas exigiria manter as duas sincronizadas a cada
-  escrita.
+  (histórico separado) — descartada por duplicar a modelagem sem ganho: uma única tabela
+  append-only já garante o histórico completo, e ter duas tabelas exigiria manter as duas
+  sincronizadas a cada escrita.
 
 ## Análise referencia a IDENTIDADE do fato (a raiz), não uma versão específica
 
@@ -38,24 +36,23 @@ pesquisa e foram aplicadas ao escopo desta primeira spec:
 ## Catálogo de campos: texto livre nesta versão, não um catálogo fixo
 
 - **Decisão**: `PrecedentFact.campo` é `CharField` de texto livre nesta spec, não uma lista
-  fechada/enum como o `prec_campos.py` do Mesk (catálogo de ~204 linhas com grupos/sensibilidade).
+  fechada/enum com catálogo de campos por grupo/sensibilidade.
 - **Rationale**: sem pesquisa automática ainda (é só entrada manual), um catálogo fixo de campos
   seria estrutura sem uso real — o advogado digita o nome do campo que precisa (“faturamento”,
   “controladora”, o que for). Se/quando a extração automática (spec futura) precisar de um
   vocabulário fechado para casar campos extraídos com campos esperados, o catálogo entra nessa
   spec, não nesta.
-- **Alternativas descartadas**: portar `prec_campos.py` inteiro agora — descartado por
+- **Alternativas descartadas**: definir um catálogo fechado de campos agora — descartado por
   over-engineering (Princípio VIII): não há, nesta spec, nenhum consumidor que precise de um
   catálogo fechado.
 
 ## Papel da empresa: lista fixa e pequena, sem grafo societário automático
 
 - **Decisão**: `PrecedentEntity.papel` usa `TextChoices` com poucos valores (`requerente`,
-  `parte_identificada`, `outro`) — sem o grafo de relações societárias
-  (`prec_entity_relations`)/grupo econômico automático do Mesk.
+  `parte_identificada`, `outro`) — sem grafo de relações societárias/grupo econômico automático.
 - **Rationale**: suficiente para o propósito desta spec (saber quem é quem no caso); o grafo
-  societário (Art. 4º, relações de controle) é um recurso sofisticado que a própria pesquisa de
-  cross-análise recomendou cortar para uma v1 — fica como melhoria futura, condicionada a quando a
+  societário (Art. 4º, relações de controle) é um recurso sofisticado, cortado deliberadamente
+  para uma v1 — fica como melhoria futura, condicionada a quando a
   pesquisa societária automática (spec futura) alimentar esse grafo de verdade.
 
 ## Remoção de empresa: cascata de fatos + análises órfãs

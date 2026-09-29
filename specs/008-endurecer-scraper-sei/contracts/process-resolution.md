@@ -45,7 +45,7 @@ e por serem exercitadas diretamente pelos testes (fixtures HTML locais, Princíp
 
 - **Entrada**: HTML de uma página com um `<form>`.
 - **Saída**: dicionário `name -> value` de cada `<input>` encontrado (last-write-wins na ordem do
-  documento, igual ao Mesk). HTML sem `<input>` → dicionário vazio, nunca lança exceção.
+  documento). HTML sem `<input>` → dicionário vazio, nunca lança exceção.
 
 ### `normalize_cade_process_number(value: str) -> str` (nova)
 

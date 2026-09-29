@@ -31,8 +31,8 @@
 
 ## Notes
 
-- Escopo deliberadamente menor que o `hub.py` original do Mesk (sem live YouTube, sem geo-IP,
-  sem os helpers de prazo) — decisões de engenharia documentadas em spec.md/Assumptions, dentro
+- Escopo deliberadamente pequeno (sem live YouTube, sem geo-IP, sem os helpers de prazo) —
+  decisões de engenharia documentadas em spec.md/Assumptions, dentro
   da autoridade do desenvolvedor responsável (não alteram princípio da constituição nem tocam a
   tensão de IA). Nenhuma emenda de constituição necessária nesta feature — ver plan.md.
 - Pronta para `/speckit.plan` (sem `/speckit.clarify`: nenhum `[NEEDS CLARIFICATION]` pendente).

@@ -8,8 +8,8 @@
 
 Novo app de domínio `apps/precedentes/` com o modelo de dados fundacional de um caso de due
 diligence (empresas, fatos com evidência e status, análises separadas dos fatos) e a disciplina de
-revisão humana com histórico versionado do Mesk ("fato ≠ análise, tudo com evidência anexada"),
-portada como schema Django (append-only por fato: corrigir nunca sobrescreve, sempre cria uma nova
+revisão humana com histórico versionado ("fato ≠ análise, tudo com evidência anexada"),
+implementada como schema Django (append-only por fato: corrigir nunca sobrescreve, sempre cria uma nova
 versão). Sem IA (decisão confirmada com o dono do projeto) e sem nenhuma fonte externa nesta spec —
 toda entrada é manual, via views autenticadas do painel. É a primeira de uma série de specs da
 iniciativa "Precedentes"; pesquisa societária, jurisprudência, extração de documentos e relatório
@@ -25,7 +25,7 @@ spec, Princípio VIII).
 **Storage**: 4 modelos novos em `apps/precedentes/models.py` (`PrecedentCase`, `PrecedentEntity`,
 `PrecedentFact`, `PrecedentAnalysis`) — ver data-model.md. `PrecedentFact` é a própria tabela de
 versionamento (cada linha é uma versão; corrigir insere uma linha nova, nunca faz `UPDATE` do
-valor), mesmo padrão do Mesk (`raiz_id`/`ativo`) adaptado a uma self-FK Django.
+valor), com o padrão `raiz_id`/`ativo` modelado como uma self-FK Django.
 
 **Testing**: `django.test.TestCase`, sem nenhum mock de HTTP (não há chamada de rede nesta spec) —
 os testes exercitam só o modelo de dados e as regras de negócio (services.py) diretamente.
@@ -111,7 +111,7 @@ puramente CRUD síncrono.
 ## Complexity Tracking
 
 > Esta spec é deliberadamente a **primeira fatia** de uma iniciativa maior (16 tabelas, 8 etapas de
-> pipeline no Mesk original). Cortar o escopo para só a fundação (modelo de dados + revisão/
+> pipeline no sistema original de referência). Cortar o escopo para só a fundação (modelo de dados + revisão/
 > versionamento manual) é a decisão que mantém esta spec dentro do Princípio VIII — as specs
 > seguintes (pesquisa societária, jurisprudência, extração de documentos, relatório final)
 > assumirão sua própria carga de complexidade quando chegar a vez, cada uma com seu próprio

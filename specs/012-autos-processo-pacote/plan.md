@@ -9,7 +9,7 @@
 Novo app de domínio `apps/autos/` que monta, em segundo plano via `run_worker`, um ZIP com todos
 os documentos públicos de um processo monitorado, numerados na ordem da Lista de Protocolos.
 Reaproveita `apps/monitoring/clients.py::get_snapshot` (fetch fresco da página, nunca o texto já
-normalizado guardado — mesma lição do Mesk: nunca confiar num snapshot potencialmente
+normalizado guardado — nunca confiar num snapshot potencialmente
 desatualizado), `extract_document_links`/`extract_protocol_records` (extração já existente) e
 `download_document` (download de um documento, já com limite de tamanho configurado) para cada
 documento. Documento sem link público vira um placeholder `.txt` só quando o andamento/página já

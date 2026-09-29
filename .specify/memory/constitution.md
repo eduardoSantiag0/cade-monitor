@@ -13,8 +13,8 @@
   Modified sections: none (mudança contida no Princípio II).
   Added sections: None
   Removed sections: None
-  Rationale: Feature 009 (digest diário do DOU, port do `cademon/dou.py`/`scraper.py` do Mesk)
-    precisa buscar publicações do CADE no Diário Oficial da União e na Resenha do CADE — domínios
+  Rationale: Feature 009 (digest diário do DOU) precisa buscar publicações do CADE no Diário
+    Oficial da União e na Resenha do CADE — domínios
     fora do texto literal anterior do Princípio II ("apenas páginas públicas do CADE/SEI"). Emenda
     aprovada pelo dono do projeto antes do /speckit.plan da feature 009, seguindo a regra do fluxo
     Spec Kit deste repositório de que mudanças arquiteturais que tocam a constituição (nova fonte

@@ -21,13 +21,12 @@
 
 - **Decisão**: aparecem no rodapé do e-mail como título + link para o artigo do DOU, sem anexo de
   PDF.
-- **Rationale**: anexar o PDF real exige imprimir a página do in.gov.br via navegador headless no
-  Mesk — uma dependência de runtime nova (Playwright/Chromium) que contraria o Princípio I/VIII
+- **Rationale**: anexar o PDF real exigiria imprimir a página do in.gov.br via navegador headless
+  — uma dependência de runtime nova (Playwright/Chromium) que contraria o Princípio I/VIII
   deste projeto (stdlib preferida, dependências novas exigem justificativa por escrito). Link
   cobre o mesmo propósito informativo sem o custo.
 - **Alternativas descartadas**: baixar o PDF oficial via `pesquisa.in.gov.br` sem imprimir a
-  página — não avaliado como viável nesta fase porque o Mesk não usa esse caminho para atas (só
-  para o fallback de seção vazia); ficaria como pesquisa própria de uma melhoria futura.
+  página — não avaliado como viável nesta fase; ficaria como pesquisa própria de uma melhoria futura.
 
 ## Cadência de busca (5 min / janela diária)
 
@@ -40,8 +39,8 @@
   possível — um registro por fonte, não um sistema de cache genérico. Reaproveita o padrão já
   existente no projeto de "marcador de estado consultado a cada tick do worker" (o próprio
   `run_worker` já faz isso para processos vencidos via `get_due_processes`).
-- **Alternativas descartadas**: réplica completa da lógica de acumulação+estabilidade do Mesk
-  (`DOU_ACC_*`, janela 06:40–11:00, "sem item novo por 20 min" = completo) — descartada por
+- **Alternativas descartadas**: lógica completa de acumulação+estabilidade por janela (no estilo
+  `DOU_ACC_*`: janela 06:40–11:00, "sem item novo por 20 min" = completo) — descartada por
   over-engineering: a spec (P1) não exige detectar "completude" da edição, só buscar dentro da
   janela e enviar o que houver: uma lógica de estabilidade full traria complexidade sem requisito
   correspondente. Fica anotada como possível refinamento se, na prática, o digest sair incompleto
@@ -67,11 +66,11 @@ Seguindo o padrão da feature 008 (item 6 do processo): antes de considerar a fe
 validar com 1-2 chamadas reais (nunca em loop/teste automatizado):
 
 - Resenha do CADE: confirmar o formato exato de resposta do endpoint Solr (`sinc.cade.gov.br`) e
-  a estrutura HTML dentro do campo `conteudo`, para calibrar o parser sem depender só da
-  descrição do código do Mesk.
+  a estrutura HTML dentro do campo `conteudo`, para calibrar o parser contra dados reais em vez de
+  só uma suposição estática.
 - Listagem in.gov.br: confirmar que o filtro por `hierarchyStr` ainda funciona no formato atual do
   site e que o `User-Agent`/retries do padrão de `apps/monitoring/clients.py` bastam (sem precisar
-  do backoff mais agressivo que o Mesk usa).
+  de um backoff mais agressivo que o já configurado).
 
 ## Correção pós-implementação (validação ao vivo, 2026-09-28)
 
