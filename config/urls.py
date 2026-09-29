@@ -6,5 +6,6 @@ urlpatterns = [
     path('', include('apps.dashboard.urls')),
     path('processes/', include('apps.processes.urls')),
     path('subscribers/', include('apps.subscribers.urls')),
+    path('precedentes/', include('apps.precedentes.urls')),
     path('telegram/', include('apps.telegram_bot.urls')),
 ]

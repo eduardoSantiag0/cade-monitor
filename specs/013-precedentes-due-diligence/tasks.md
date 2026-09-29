@@ -18,11 +18,11 @@ desta rodada de tasks — a linha do tempo de um caso sem nenhum fato não é ú
 
 ## Phase 1: Setup
 
-- [ ] T001 Criar o app `apps/precedentes/` (`__init__.py`, `apps.py` com `PrecedentesConfig`,
+- [X] T001 Criar o app `apps/precedentes/` (`__init__.py`, `apps.py` com `PrecedentesConfig`,
   `migrations/__init__.py`, `tests/__init__.py`).
-- [ ] T002 Registrar `'apps.precedentes.apps.PrecedentesConfig'` em `INSTALLED_APPS` em
+- [X] T002 Registrar `'apps.precedentes.apps.PrecedentesConfig'` em `INSTALLED_APPS` em
   `config/settings.py`.
-- [ ] T003 [P] Criar `apps/precedentes/urls.py` (vazio por ora, rotas vêm em US1/US2) e incluir em
+- [X] T003 [P] Criar `apps/precedentes/urls.py` (vazio por ora, rotas vêm em US1/US2) e incluir em
   `config/urls.py` (`path('precedentes/', include('apps.precedentes.urls'))`).
 
 **Checkpoint**: `python manage.py check` passa; app carrega sem erro.
@@ -35,17 +35,17 @@ desta rodada de tasks — a linha do tempo de um caso sem nenhum fato não é ú
 
 **⚠️ CRITICAL**: nenhuma história de usuário começa antes desta fase terminar.
 
-- [ ] T004 Criar os 4 modelos em `apps/precedentes/models.py` conforme data-model.md:
+- [X] T004 Criar os 4 modelos em `apps/precedentes/models.py` conforme data-model.md:
   `PrecedentCase`, `PrecedentEntity` (`papel` choices `requerente`/`parte_identificada`/`outro`),
   `PrecedentFact` (self-FK `root`, `is_current`, `status` choices
   `confirmado`/`confirmar_cliente`/`solicitar_cliente`/`nao_localizado`), `PrecedentAnalysis`
   (`facts` M2M).
-- [ ] T005 Gerar e revisar a migration: `./.venv/Scripts/python.exe manage.py makemigrations
+- [X] T005 Gerar e revisar a migration: `./.venv/Scripts/python.exe manage.py makemigrations
   precedentes`.
-- [ ] T006 [P] Registrar os 4 modelos em `apps/precedentes/admin.py` (list_display simples,
+- [X] T006 [P] Registrar os 4 modelos em `apps/precedentes/admin.py` (list_display simples,
   inlines de `PrecedentEntity`/`PrecedentFact` no admin do caso, se fizer sentido — cadastro manual
   via admin é um caminho de apoio, não a via principal).
-- [ ] T007 [P] Teste em `apps/precedentes/tests/test_models.py`: `PrecedentFact` criado sem `root`
+- [X] T007 [P] Teste em `apps/precedentes/tests/test_models.py`: `PrecedentFact` criado sem `root`
   fica com `root=None`; um grupo de versões (raiz + 2 correções manuais via `objects.create`, sem
   passar pelo service ainda) é encontrável via `Q(id=raiz.id) | Q(root_id=raiz.id)`.
 
@@ -66,44 +66,44 @@ destacado.
 
 ### Tests for User Story 1+2
 
-- [ ] T008 [P] [US1] Teste em `apps/precedentes/tests/test_services.py`: `create_case` cria o caso
+- [X] T008 [P] [US1] Teste em `apps/precedentes/tests/test_services.py`: `create_case` cria o caso
   com `created_by` correto; `add_entity` cria a empresa associada ao caso.
-- [ ] T009 [P] [US1] Teste em `apps/precedentes/tests/test_services.py`: `update_entity` altera
+- [X] T009 [P] [US1] Teste em `apps/precedentes/tests/test_services.py`: `update_entity` altera
   papel/razão social/CNPJ/país de uma empresa existente sem criar uma segunda linha (FR-002).
-- [ ] T010 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com
+- [X] T010 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com
   `status='confirmado'` e `fonte_descricao` preenchida cria o fato normalmente (FR-003).
-- [ ] T011 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com
+- [X] T011 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com
   `status='confirmado'` e SEM `fonte_descricao` nem `fonte_url` levanta `ValidationError` e não
   cria nada (FR-004).
-- [ ] T012 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com `valor`
+- [X] T012 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com `valor`
   vazio levanta `ValidationError` (FR-005).
-- [ ] T013 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com
+- [X] T013 [P] [US2] Teste em `apps/precedentes/tests/test_services.py`: `record_fact` com
   `status='solicitar_cliente'` e sem fonte é aceito normalmente (a exigência de fonte é só para
   `confirmado`, FR-004 não se aplica aos outros status).
-- [ ] T014 [P] [US1] Teste de view em `apps/precedentes/tests/test_views.py`: `GET /precedentes/`
+- [X] T014 [P] [US1] Teste de view em `apps/precedentes/tests/test_views.py`: `GET /precedentes/`
   sem autenticação redireciona para login; autenticado, lista os casos existentes.
-- [ ] T015 [P] [US1] Teste de view em `apps/precedentes/tests/test_views.py`: `POST
+- [X] T015 [P] [US1] Teste de view em `apps/precedentes/tests/test_views.py`: `POST
   /precedentes/novo/` cria o caso e redireciona para o detalhe; `POST
   /precedentes/empresas/<pk>/editar/` atualiza a empresa e redireciona de volta.
-- [ ] T016 [P] [US2] Teste de view em `apps/precedentes/tests/test_views.py`: `GET
+- [X] T016 [P] [US2] Teste de view em `apps/precedentes/tests/test_views.py`: `GET
   /precedentes/<pk>/` mostra as empresas e os fatos atuais de cada uma, agrupados por status, com
   os pendentes (`confirmar_cliente`/`solicitar_cliente`) visualmente destacados (verificar por
   classe CSS/contexto, não só pela presença do texto).
 
 ### Implementation for User Story 1+2
 
-- [ ] T017 [US1] Implementar `create_case`, `add_entity` e `update_entity` em
+- [X] T017 [US1] Implementar `create_case`, `add_entity` e `update_entity` em
   `apps/precedentes/services.py`. *(depende de T008, T009)*
-- [ ] T018 [US2] Implementar `record_fact` em `apps/precedentes/services.py` com as validações de
+- [X] T018 [US2] Implementar `record_fact` em `apps/precedentes/services.py` com as validações de
   FR-004/FR-005. *(depende de T010, T011, T012, T013)*
-- [ ] T019 [US1] [US2] Implementar `apps/precedentes/selectors.py::current_facts(entity)`.
-- [ ] T020 [US1] Implementar as views `precedentes_list`/`case_create`/`entity_update` em
+- [X] T019 [US1] [US2] Implementar `apps/precedentes/selectors.py::current_facts(entity)`.
+- [X] T020 [US1] Implementar as views `precedentes_list`/`case_create`/`entity_update` em
   `apps/precedentes/views.py` (`@login_required`) e as rotas correspondentes em
   `apps/precedentes/urls.py`. *(depende de T014, T015, T017)*
-- [ ] T021 [US2] Implementar a view de detalhe do caso e a de registro de fato (`POST
+- [X] T021 [US2] Implementar a view de detalhe do caso e a de registro de fato (`POST
   /precedentes/empresas/<pk>/fatos/`) e o formulário inline no template. *(depende de T016, T018,
   T019)*
-- [ ] T022 [US1] [US2] Criar `templates/precedentes/list.html` (lista de casos, link "Novo caso")
+- [X] T022 [US1] [US2] Criar `templates/precedentes/list.html` (lista de casos, link "Novo caso")
   e `templates/precedentes/case_detail.html` (empresas com edição inline, fatos atuais agrupados
   por status com destaque visual para pendentes — FR-011; formulários de adicionar empresa/fato).
 
@@ -122,26 +122,26 @@ que as 3 versões ficam visíveis no histórico, na ordem certa.
 
 ### Tests for User Story 3
 
-- [ ] T023 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: `correct_fact` com
+- [X] T023 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: `correct_fact` com
   `motivo` preenchido cria uma nova versão (`root` aponta pra raiz, `is_current=True`), e a versão
   anterior passa a `is_current=False` sem ter o valor alterado (FR-006).
-- [ ] T024 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: `correct_fact` sem
+- [X] T024 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: `correct_fact` sem
   `motivo` levanta `ValidationError` e não altera nada (FR-007).
-- [ ] T025 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: corrigir a mesma raiz duas
+- [X] T025 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: corrigir a mesma raiz duas
   vezes seguidas produz 3 versões no total (raiz + 2 correções), todas encontráveis por
   `selectors.fact_history`, em ordem cronológica, cada uma com seu `motivo` (FR-008/FR-009).
-- [ ] T026 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: corrigir uma versão que
+- [X] T026 [P] [US3] Teste em `apps/precedentes/tests/test_services.py`: corrigir uma versão que
   NÃO é a raiz (corrigir a correção) resolve corretamente para o grupo (mesma raiz), não cria um
   grupo novo por engano.
-- [ ] T027 [P] [US3] Teste de view em `apps/precedentes/tests/test_views.py`: `GET
+- [X] T027 [P] [US3] Teste de view em `apps/precedentes/tests/test_views.py`: `GET
   /precedentes/fatos/<pk>/historico/` mostra as versões em ordem, com motivo de cada correção.
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Implementar `correct_fact` em `apps/precedentes/services.py` conforme
+- [X] T028 [US3] Implementar `correct_fact` em `apps/precedentes/services.py` conforme
   contracts/precedentes.md. *(depende de T023, T024, T025, T026)*
-- [ ] T029 [US3] Implementar `apps/precedentes/selectors.py::fact_history(fact)`.
-- [ ] T030 [US3] Implementar a view/rota de correção e a página/seção de histórico
+- [X] T029 [US3] Implementar `apps/precedentes/selectors.py::fact_history(fact)`.
+- [X] T030 [US3] Implementar a view/rota de correção e a página/seção de histórico
   (`templates/precedentes/case_detail.html` ou um template próprio para histórico). *(depende de
   T027, T028, T029)*
 
@@ -159,22 +159,22 @@ confirmar que a análise continua referenciando o fato (agora atualizado) sem qu
 
 ### Tests for User Story 4
 
-- [ ] T031 [P] [US4] Teste em `apps/precedentes/tests/test_services.py`: `record_analysis` associa
+- [X] T031 [P] [US4] Teste em `apps/precedentes/tests/test_services.py`: `record_analysis` associa
   a análise aos fatos-base informados (via linha-raiz, mesmo se um fato não-raiz for passado por
   engano — resolve para a raiz).
-- [ ] T032 [P] [US4] Teste em `apps/precedentes/tests/test_services.py`: depois de `correct_fact`
+- [X] T032 [P] [US4] Teste em `apps/precedentes/tests/test_services.py`: depois de `correct_fact`
   num fato-base de uma análise já existente, a análise continua associada (a raiz nunca muda) e o
   valor atual exibido para esse fato-base é o da versão corrigida, não a antiga (FR-010 cenário 2).
-- [ ] T033 [P] [US4] Teste de view em `apps/precedentes/tests/test_views.py`: a página do caso
+- [X] T033 [P] [US4] Teste de view em `apps/precedentes/tests/test_views.py`: a página do caso
   mostra fatos e análises em seções/destaque visualmente distintos, e as contagens de cada um
   aparecem separadas (FR-011, SC-003 verificável por presença de marcadores distintos no HTML).
 
 ### Implementation for User Story 4
 
-- [ ] T034 [US4] Implementar `record_analysis` em `apps/precedentes/services.py`. *(depende de
+- [X] T034 [US4] Implementar `record_analysis` em `apps/precedentes/services.py`. *(depende de
   T031, T032)*
-- [ ] T035 [US4] Implementar `apps/precedentes/selectors.py::case_analyses(case)`.
-- [ ] T036 [US4] Implementar a view/rota de registro de análise e a seção correspondente em
+- [X] T035 [US4] Implementar `apps/precedentes/selectors.py::case_analyses(case)`.
+- [X] T036 [US4] Implementar a view/rota de registro de análise e a seção correspondente em
   `templates/precedentes/case_detail.html`, com destaque visual distinto de um fato (ex.: cor/
   rótulo "Análise" vs. "Fato"). *(depende de T033, T034, T035)*
 
@@ -184,24 +184,24 @@ confirmar que a análise continua referenciando o fato (agora atualizado) sem qu
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T037 Implementar `remove_entity` em `apps/precedentes/services.py` (FR-012: cascata nativa
+- [X] T037 Implementar `remove_entity` em `apps/precedentes/services.py` (FR-012: cascata nativa
   do Django remove os fatos da empresa; remove explicitamente qualquer `PrecedentAnalysis` do caso
   que fique com `facts.count() == 0` após a cascata) + a view/rota de remoção com confirmação
   prévia no template (spec.md, Edge Cases).
-- [ ] T038 [P] Teste em `apps/precedentes/tests/test_services.py`: `remove_entity` remove a
+- [X] T038 [P] Teste em `apps/precedentes/tests/test_services.py`: `remove_entity` remove a
   empresa, seus fatos, e qualquer análise que dependia só dela; uma análise com fatos de OUTRA
   empresa sobrevive (SC-004 — nenhum registro órfão).
-- [ ] T039 Rodar `./.venv/Scripts/python.exe manage.py test apps.precedentes` e confirmar toda a
+- [X] T039 Rodar `./.venv/Scripts/python.exe manage.py test apps.precedentes` e confirmar toda a
   suíte passando (quickstart.md, passo 1).
-- [ ] T040 Revisão dedicada confirmando FR-004/FR-007 (única "validação contra a realidade"
+- [X] T040 Revisão dedicada confirmando FR-004/FR-007 (única "validação contra a realidade"
   possível nesta spec, já que não há rede): reler os testes T011 (confirmado sem fonte) e T024
   (correção sem motivo) e confirmar, por inspeção direta do código de `services.py`, que a
   validação roda ANTES de qualquer `objects.create`/`.save()` — nenhum estado parcial é gravado
   quando a validação falha (mesmo espírito da revisão de segurança da feature 011, adaptado ao
   risco desta spec: gravar dado inválido silenciosamente, não uma ação destrutiva).
-- [ ] T041 [P] Validar quickstart.md passo 2 (fluxo manual via shell) e confirmar que o resultado
+- [X] T041 [P] Validar quickstart.md passo 2 (fluxo manual via shell) e confirmar que o resultado
   bate com o esperado.
-- [ ] T042 [P] Adicionar ao README uma linha sobre a nova seção "Precedentes" do painel (rótulo,
+- [X] T042 [P] Adicionar ao README uma linha sobre a nova seção "Precedentes" do painel (rótulo,
   onde encontrar), seguindo o padrão de features anteriores.
 
 ---

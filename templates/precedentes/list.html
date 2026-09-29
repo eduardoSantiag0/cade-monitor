@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Precedentes — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Precedentes — due diligence</h2>
+      <p>Dossiês de operações em análise no CADE. "Fato ≠ análise, tudo com evidência anexada".</p>
+    </div>
+  </div>
+
+  <details>
+    <summary class="btn btn-light btn-sm" style="cursor:pointer">+ Novo caso</summary>
+    <form method="post" action="{% url 'precedentes:case_create' %}" style="margin-top:12px;max-width:520px">
+      {% csrf_token %}
+      <label for="id_titulo">Título</label>
+      {{ form.titulo }}
+      <label for="id_cliente" style="margin-top:8px">Cliente</label>
+      {{ form.cliente }}
+      <label for="id_notas" style="margin-top:8px">Notas</label>
+      {{ form.notas }}
+      <button type="submit" class="btn btn-sm" style="margin-top:10px">Criar caso</button>
+    </form>
+  </details>
+
+  {% if cases %}
+  <div class="table-wrap" style="margin-top:16px">
+    <table>
+      <thead>
+        <tr><th>Título</th><th>Cliente</th><th>Empresas</th><th>Análises</th><th>Criado em</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for case in cases %}
+        <tr>
+          <td><strong>{{ case.titulo }}</strong></td>
+          <td class="muted" style="font-size:12px">{{ case.cliente|default:"&mdash;" }}</td>
+          <td>{{ case.entities.count }}</td>
+          <td>{{ case.analyses.count }}</td>
+          <td class="muted" style="font-size:12px">{{ case.created_at|date:"d/m/Y" }}</td>
+          <td><a href="{% url 'precedentes:case_detail' case.pk %}" class="btn btn-light btn-sm">Abrir</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted" style="margin-top:16px">Nenhum caso ainda. Use "+ Novo caso" para começar.</p>
+  {% endif %}
+</section>
+{% endblock %}

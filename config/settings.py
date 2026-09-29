@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'apps.dou.apps.DouConfig',
     'apps.agenda.apps.AgendaConfig',
     'apps.autos.apps.AutosConfig',
+    'apps.precedentes.apps.PrecedentesConfig',
     'apps.dashboard.apps.DashboardConfig',
     'apps.telegram_bot.apps.TelegramBotConfig',
 ]

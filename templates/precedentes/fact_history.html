@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Histórico do fato — Precedentes — CADE Monitor{% endblock %}
+{% block content %}
+<section>
+  <div class="section-head">
+    <div>
+      <h2>Histórico: {{ fact.campo }}</h2>
+      <p class="muted"><a href="{% url 'precedentes:case_detail' fact.entity.case_id %}">← Voltar ao caso</a></p>
+    </div>
+  </div>
+
+  {% for version in history %}
+  <div class="fact-card">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <div><strong>{{ version.valor }}</strong></div>
+      <span class="badge badge-{{ version.status }}">{{ version.get_status_display }}</span>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:4px">
+      {% if version.is_current %}Versão atual{% else %}Versão anterior{% endif %}
+      — registrada em {{ version.created_at|date:"d/m/Y H:i" }}
+      {% if version.created_by %}por {{ version.created_by }}{% endif %}
+    </div>
+    {% if version.fonte_descricao or version.fonte_url %}
+    <div class="muted" style="font-size:12px;margin-top:2px">
+      Fonte: {{ version.fonte_descricao }} {% if version.fonte_url %}<a href="{{ version.fonte_url }}" target="_blank" rel="noopener">↗</a>{% endif %}
+    </div>
+    {% endif %}
+    {% if version.citacao %}
+    <div class="muted" style="font-size:12px;margin-top:2px">“{{ version.citacao }}”</div>
+    {% endif %}
+    {% if version.motivo %}
+    <div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">
+      <strong>Motivo da correção:</strong> {{ version.motivo }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}
