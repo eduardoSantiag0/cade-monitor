@@ -22,6 +22,7 @@ API_BASE = 'https://api.telegram.org'
 MAX_MESSAGE_LENGTH = 4096
 
 BOT_COMMANDS = [
+    ('preview', '🧪 Ver uma demonstração do sistema'),
     ('watch', '📡 Monitorar um processo: /watch 08700.005905/2026-38'),
     ('last_update', '🧾 Última atualização com o documento'),
     ('list', '📋 Processos que você acompanha'),

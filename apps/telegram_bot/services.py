@@ -233,6 +233,14 @@ def cmd_help(chat: TelegramChat, args: str) -> str:
     return messages.help_text()
 
 
+def cmd_preview(chat: TelegramChat, args: str) -> str:
+    """Demonstração para portfólio (spec 014) — handler fino, toda a lógica
+    mora em RunDemoUseCase (Princípio III: view/handler não tem regra de negócio)."""
+    from .demo import RunDemoUseCase
+
+    return RunDemoUseCase().run()
+
+
 def cmd_watch(chat: TelegramChat, args: str) -> str:
     if not args:
         return messages.missing_arg('watch')
@@ -407,6 +415,7 @@ def cmd_email(chat: TelegramChat, args: str) -> str:
 COMMANDS: dict[str, Callable[[TelegramChat, str], str]] = {
     'start': cmd_start,
     'help': cmd_help,
+    'preview': cmd_preview,
     'watch': cmd_watch,
     'unwatch': cmd_unwatch,
     'list': cmd_list,

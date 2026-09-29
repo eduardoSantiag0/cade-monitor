@@ -286,3 +286,24 @@ class GroupTest(CommandTestBase):
         chat = self.chat(-100500)
         self.assertEqual(chat.chat_type, 'supergroup')
         self.assertEqual(chat.subscriber.subscriptions.count(), 1)
+
+
+@telegram_settings
+class PreviewCommandTest(CommandTestBase):
+    """/preview (spec 014): comando de demonstração, aberto a qualquer usuário —
+    não é uma MANAGEMENT_COMMANDS, não exige processo/assinatura prévia."""
+
+    GROUP = {'chat_id': -500, 'chat_type': 'group', 'title': 'Equipe'}
+
+    def test_registered_and_not_a_management_command(self):
+        self.assertIn('preview', services.COMMANDS)
+        self.assertNotIn('preview', services.MANAGEMENT_COMMANDS)
+
+    def test_works_in_private_without_any_prior_subscription(self):
+        text = self.send('/preview')
+        self.assertIn('Demonstração', text)
+
+    def test_works_in_group_without_admin(self):
+        # Membro comum (não admin) — se fosse management command, seria negado.
+        text = self.send('/preview', **self.GROUP)
+        self.assertIn('Demonstração', text)

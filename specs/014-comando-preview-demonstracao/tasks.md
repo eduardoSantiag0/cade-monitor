@@ -18,10 +18,10 @@ User Story 3 (README) vem depois.
 
 ## Phase 1: Setup
 
-- [ ] T001 Criar `apps/telegram_bot/demo.py` com as constantes do cenário fixo:
+- [X] T001 Criar `apps/telegram_bot/demo.py` com as constantes do cenário fixo:
   `DEMO_PROCESS_SOURCE = '08700.000000/2026-00'`, `DEMO_PROCESS_LABEL`, `DEMO_OLD_TEXT`,
   `DEMO_NEW_TEXT` (andamento anterior/novo, textos fictícios em português).
-- [ ] T002 [P] Criar `apps/telegram_bot/tests/test_demo.py` (esqueleto, sem teste ainda).
+- [X] T002 [P] Criar `apps/telegram_bot/tests/test_demo.py` (esqueleto, sem teste ainda).
 
 **Checkpoint**: `python manage.py check` passa; módulo importa sem erro.
 
@@ -39,53 +39,53 @@ FR-009 e que nenhum mock de rede/envio foi chamado.
 
 ### Tests for User Story 1+2
 
-- [ ] T003 [P] [US1] Teste em `apps/telegram_bot/tests/test_demo.py`: `RunDemoUseCase().run()`
+- [X] T003 [P] [US1] Teste em `apps/telegram_bot/tests/test_demo.py`: `RunDemoUseCase().run()`
   devolve uma string contendo processo fictício (rotulado como demonstração), andamento anterior,
   nova movimentação, resumo (derivado de `compute_diff`, não hardcoded), data/hora, e os 3 canais
   de notificação (FR-009).
-- [ ] T004 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py` (mock estrito de rede):
+- [X] T004 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py` (mock estrito de rede):
   `unittest.mock.patch('urllib.request.urlopen')` configurado para levantar exceção se chamado;
   `RunDemoUseCase().run()` completa normalmente sem disparar essa exceção (prova estrutural de
   FR-006/SC-002 — nenhuma função de rede é alcançada, direta ou indiretamente).
-- [ ] T005 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py` (mock estrito de envio):
+- [X] T005 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py` (mock estrito de envio):
   `unittest.mock.patch` em `apps.notifications.channels.email.send_email_notification`,
   `apps.notifications.channels.evolution.send_whatsapp_notification`, e
   `apps.telegram_bot.client.send_message`/`call`, cada um configurado para levantar exceção se
   chamado; `RunDemoUseCase().run()` completa normalmente (prova de FR-007/SC-003 — o conteúdo de
   notificação é só formatado e exibido, nunca despachado).
-- [ ] T006 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py`: chamar
+- [X] T006 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py`: chamar
   `RunDemoUseCase().run()` 5 vezes seguidas; confirmar `MonitoredProcess.objects.filter(source=
   DEMO_PROCESS_SOURCE).count() == 1` e `DetectedChange.objects.filter(process__source=
   DEMO_PROCESS_SOURCE).count() == 1` ao final (FR-002/SC-004 — idempotente, nunca acumula).
-- [ ] T007 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py`: depois de
+- [X] T007 [P] [US2] Teste em `apps/telegram_bot/tests/test_demo.py`: depois de
   `RunDemoUseCase().run()`, `apps.monitoring.scheduler.get_due_processes()` nunca inclui o
   processo de demonstração (confirma `status=ARCHIVED` isola do ciclo real — FR-008).
-- [ ] T008 [P] [US1] Teste em `apps/telegram_bot/tests/test_services.py` (arquivo já existente):
+- [X] T008 [P] [US1] Teste em `apps/telegram_bot/tests/test_services.py` (arquivo já existente):
   `/preview` está registrado em `COMMANDS`, NÃO está em `MANAGEMENT_COMMANDS`, e
   `cmd_preview(chat, '')` funciona tanto simulando um chat privado quanto um chat de grupo, sem
   exigir assinatura/processo prévio do usuário (spec.md, US1 cenário 3).
 
 ### Implementation for User Story 1+2
 
-- [ ] T009 [US1] Implementar `_get_or_create_demo_process()` em `apps/telegram_bot/demo.py`:
+- [X] T009 [US1] Implementar `_get_or_create_demo_process()` em `apps/telegram_bot/demo.py`:
   get-or-create de `MonitoredProcess(source=DEMO_PROCESS_SOURCE, status=ProcessStatus.ARCHIVED,
   label=DEMO_PROCESS_LABEL)`. *(depende de T001)*
-- [ ] T010 [US1] Implementar `_get_or_create_demo_change(process, summary, diff_text)` em
+- [X] T010 [US1] Implementar `_get_or_create_demo_change(process, summary, diff_text)` em
   `apps/telegram_bot/demo.py`: get-or-create/atualiza no lugar o conjunto reservado
   `CheckRun`/`PageSnapshot`/`DetectedChange` de demonstração (nunca cria um segundo conjunto —
   reaproveita os mesmos registros a cada chamada). *(depende de T006, T009)*
-- [ ] T011 [US1] Implementar `demo_preview(process, old_text, new_text, summary, detected_at,
+- [X] T011 [US1] Implementar `demo_preview(process, old_text, new_text, summary, detected_at,
   notification_excerpt)` em `apps/telegram_bot/messages.py`: monta o texto final da resposta,
   combinando todos os elementos de FR-009, claramente rotulado como demonstração.
-- [ ] T012 [US1] Implementar `RunDemoUseCase.run()` em `apps/telegram_bot/demo.py`, conforme
+- [X] T012 [US1] Implementar `RunDemoUseCase.run()` em `apps/telegram_bot/demo.py`, conforme
   contracts/preview.md: chama T009 → monta cenário fixo → `compute_diff` (`apps.monitoring.diff`)
   → T010 → `build_test_notification_body` (`apps.notifications.services`) → T011. Nunca chama
   `get_snapshot`, `collect_new_documents`, `create_notifications_for_change`, nem qualquer função
   de envio real. *(depende de T003, T004, T005, T010, T011)*
-- [ ] T013 [US1] Implementar `cmd_preview(chat, args)` em `apps/telegram_bot/services.py`
+- [X] T013 [US1] Implementar `cmd_preview(chat, args)` em `apps/telegram_bot/services.py`
   (handler fino: só chama `RunDemoUseCase().run()`) e registrar `COMMANDS['preview'] = cmd_preview`
   — fora de `MANAGEMENT_COMMANDS`. *(depende de T008, T012)*
-- [ ] T014 [US1] Adicionar `('preview', '🧪 Ver uma demonstração do sistema')` a `BOT_COMMANDS` em
+- [X] T014 [US1] Adicionar `('preview', '🧪 Ver uma demonstração do sistema')` a `BOT_COMMANDS` em
   `apps/telegram_bot/client.py` (alimenta `set_my_commands()`, publicado a cada início do
   `run_worker`).
 
@@ -103,7 +103,7 @@ segurança provadas por teste, não só por inspeção.
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Adicionar ao README uma seção "Modo de demonstração" explicando o propósito
+- [X] T015 [US3] Adicionar ao README uma seção "Modo de demonstração" explicando o propósito
   (portfólio, sem configurar nada real), como executar `/preview`, e um exemplo do formato de
   resposta (FR-011).
 
@@ -113,11 +113,11 @@ segurança provadas por teste, não só por inspeção.
 
 ## Phase 4: Polish & Cross-Cutting Concerns
 
-- [ ] T016 Rodar `./.venv/Scripts/python.exe manage.py test apps.telegram_bot` e confirmar toda a
+- [X] T016 Rodar `./.venv/Scripts/python.exe manage.py test apps.telegram_bot` e confirmar toda a
   suíte (existente + nova) passando (quickstart.md, passo 1).
-- [ ] T017 Validar quickstart.md passos 2-4 (resposta manual, idempotência, suíte completa do
+- [X] T017 Validar quickstart.md passos 2-4 (resposta manual, idempotência, suíte completa do
   bot).
-- [ ] T018 Revisão dedicada confirmando FR-006/FR-007 por inspeção direta de
+- [X] T018 Revisão dedicada confirmando FR-006/FR-007 por inspeção direta de
   `apps/telegram_bot/demo.py`: `RunDemoUseCase.run()` nunca importa/chama, direta ou
   indiretamente, `apps.monitoring.clients.get_snapshot`/`collect_new_documents`, nem qualquer
   função de `apps.notifications.channels.*`/`apps.telegram_bot.client.call`/`send_message` fora
@@ -173,3 +173,9 @@ segurança provadas por teste, não só por inspeção.
   webhook, mesmo padrão de robustez das features anteriores.
 - Parar no checkpoint de US1+US2 já entrega o valor completo de produto — US3 é só polimento de
   descoberta (README), não uma dependência funcional.
+
+**Desvio de execução**: os testes de `telegram_bot` neste repositório vivem em `tests/` na raiz
+(não em `apps/telegram_bot/tests/`, que não existia antes desta feature) — `T003`-`T007` foram
+implementados em `tests/test_telegram_demo.py` e `T008` em `tests/test_telegram_commands.py`
+(nova classe `PreviewCommandTest`), seguindo a convenção já estabelecida pelo resto do app em vez
+do caminho literal sugerido originalmente.

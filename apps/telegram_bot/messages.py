@@ -24,7 +24,8 @@ COMMANDS_HELP = (
     '🔕 /pause <processo> — pausar alertas\n'
     '🔔 /resume <processo> — retomar alertas\n'
     '📚 /history <processo> — últimas mudanças detectadas\n'
-    '📧 /email <endereço> — também receber por e-mail (ou /email off para remover)'
+    '📧 /email <endereço> — também receber por e-mail (ou /email off para remover)\n'
+    '🧪 /preview — ver uma demonstração do sistema'
 )
 
 
@@ -265,3 +266,27 @@ def latest_update(label: str, process_url: str, record: dict | None, doc_url: st
         f'🏛️ Última atualização de ⚖️ {label}\n\n{doc_block}\n\n{change_block}{note}'
         f'\n\n🧭 Processo no SEI/CADE:\n{process_url}'
     )
+
+
+def demo_preview(process, old_text: str, new_text: str, summary: str, detected_at, notification_excerpt: str) -> str:
+    """Resposta do /preview (spec 014) — demonstração para portfólio, sem processo/
+    notificação reais. Fica claro em toda a mensagem que é um exemplo fictício."""
+    return (
+        '🧪 Demonstração do CADE Monitor\n\n'
+        f'⚖️ Processo (fictício): {process.label}\n'
+        f'🔢 Número de exemplo: {process.source}\n\n'
+        f'🗒️ Movimento anterior:\n{old_text}\n\n'
+        f'🆕 Nova movimentação detectada:\n{new_text}\n\n'
+        f'🕒 Detectada em: {fmt_dt(detected_at)}\n\n'
+        f'📝 Resumo: {summary}\n\n'
+        '📬 O CADE Monitor identificaria essa alteração automaticamente e notificaria '
+        'quem acompanha o processo. Exemplo de como a notificação apareceria (Telegram):\n\n'
+        f'{notification_excerpt}\n\n'
+        '📡 Canais de notificação disponíveis: 📧 E-mail · 📱 WhatsApp · 🤖 Telegram\n\n'
+        '⚠️ Tudo acima é fictício — nenhum processo real foi consultado e nenhuma '
+        'notificação real foi enviada.'
+    )
+
+
+def demo_preview_error() -> str:
+    return '🧪 Não consegui montar a demonstração agora. Tente novamente em instantes.'

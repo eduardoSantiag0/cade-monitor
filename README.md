@@ -157,11 +157,54 @@ Para cada processo vencido, `apps/monitoring/services.py::run_check` faz:
 | `/pause <processo>` / `/resume <processo>` | Pausa ou retoma os alertas **só para você** (ou para o grupo). |
 | `/unwatch <processo>` | Para de monitorar. |
 | `/start`, `/help` | Apresentação e lista de comandos. |
+| `/preview` | 🧪 Demonstração do sistema — veja abaixo. |
 
 **Regras:**
 - Cada conversa acompanha até 10 processos (`TELEGRAM_MAX_PROCESSES_PER_CHAT`).
 - Em grupos, só administradores usam `/watch`, `/unwatch`, `/pause` e `/resume`.
 - Comandos no formato `/comando@NomeDoBot` também funcionam.
+
+---
+
+## 🧪 Modo de demonstração
+
+Este projeto também serve como peça de portfólio: quem chega ao repositório pode ver o CADE
+Monitor funcionando sem configurar um monitoramento real, informar dados pessoais ou esperar uma
+movimentação de verdade acontecer no CADE.
+
+Mande `/preview` para o bot. O comando roda uma demonstração controlada do fluxo principal —
+detecção de mudança → notificação — usando um processo **fictício** reservado só para isso:
+
+```
+🧪 Demonstração do CADE Monitor
+
+⚖️ Processo (fictício): [Demonstração] Ato de Concentração fictício
+🔢 Número de exemplo: 08700.000000/2026-00
+
+🗒️ Movimento anterior:
+Andamento: Processo distribuído para a Superintendência-Geral.
+
+🆕 Nova movimentação detectada:
+Andamento: Processo distribuído para a Superintendência-Geral.
+Andamento: Documento adicionado aos autos.
+
+🕒 Detectada em: 29/09/2026 às 00:00
+
+📝 Resumo: 1 novo andamento detectado.
+
+📬 O CADE Monitor identificaria essa alteração automaticamente e notificaria
+quem acompanha o processo. Exemplo de como a notificação apareceria (Telegram):
+[...]
+
+📡 Canais de notificação disponíveis: 📧 E-mail · 📱 WhatsApp · 🤖 Telegram
+
+⚠️ Tudo acima é fictício — nenhum processo real foi consultado e nenhuma
+notificação real foi enviada.
+```
+
+A demonstração reaproveita a lógica real de diff e de formatação de notificação da aplicação —
+não é um texto estático — mas nunca consulta o SEI/CADE, nunca envia uma notificação de verdade e
+nunca toca processo/assinante real (`RunDemoUseCase`, em `apps/telegram_bot/demo.py`).
 
 ---
 
